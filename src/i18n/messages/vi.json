@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "Chia Tiền Nhóm",
+    "tagline": "Chia tiền dễ dàng, không cần đăng nhập"
+  },
+  "home": {
+    "createGroup": "Tạo nhóm mới",
+    "recentGroups": "Nhóm gần đây",
+    "groupNamePlaceholder": "Tên chuyến đi (VD: Du lịch Đà Lạt)",
+    "noRecentGroups": "Chưa có nhóm nào. Hãy tạo nhóm đầu tiên!"
+  },
+  "event": {
+    "addExpense": "Thêm khoản chi",
+    "members": "Thành viên",
+    "expenses": "Chi tiêu",
+    "settlement": "Chốt sổ",
+    "shareLink": "Chia sẻ link",
+    "totalExpense": "Tổng chi tiêu"
+  },
+  "expense": {
+    "title": "Tên khoản chi",
+    "amount": "Số tiền",
+    "paidBy": "Người trả",
+    "splitBetween": "Chia cho",
+    "splitEvenly": "Chia đều",
+    "splitCustom": "Nhập số tiền",
+    "splitShares": "Theo tỷ lệ",
+    "save": "Lưu khoản chi",
+    "delete": "Xoá",
+    "addedBy": "Được thêm bởi"
+  },
+  "settlement": {
+    "owes": "nợ",
+    "markAsPaid": "Đã chuyển tiền",
+    "confirmReceived": "Đã nhận được",
+    "pending": "Chờ xác nhận",
+    "markedPaid": "Đã chuyển — chờ xác nhận nhận",
+    "confirmed": "Hoàn tất",
+    "allSettled": "Mọi người đã huề nhau! 🎉"
+  },
+  "participant": {
+    "addMember": "Thêm thành viên",
+    "namePlaceholder": "Tên thành viên",
+    "selectYourName": "Bạn là ai trong nhóm này?"
+  },
+  "common": {
+    "save": "Lưu",
+    "cancel": "Huỷ",
+    "delete": "Xoá",
+    "confirm": "Xác nhận",
+    "loading": "Đang tải...",
+    "error": "Đã xảy ra lỗi",
+    "notFound": "Không tìm thấy",
+    "back": "Quay lại"
+  },
+  "errors": {
+    "eventNotFound": "Nhóm không tồn tại hoặc đã bị xoá.",
+    "splitMismatch": "Tổng các phần chia không khớp với số tiền khoản chi.",
+    "versionConflict": "Dữ liệu đã thay đổi, vui lòng tải lại trang.",
+    "unauthorized": "Bạn không có quyền thực hiện thao tác này."
+  }
+}

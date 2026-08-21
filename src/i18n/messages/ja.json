@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "グループ割り勘",
+    "tagline": "ログイン不要で簡単に割り勘"
+  },
+  "home": {
+    "createGroup": "グループを作成",
+    "recentGroups": "最近のグループ",
+    "groupNamePlaceholder": "旅行名（例：大阪旅行）",
+    "noRecentGroups": "グループがありません。最初のグループを作成しましょう！"
+  },
+  "event": {
+    "addExpense": "支出を追加",
+    "members": "メンバー",
+    "expenses": "支出",
+    "settlement": "精算",
+    "shareLink": "リンクを共有",
+    "totalExpense": "合計支出"
+  },
+  "expense": {
+    "title": "支出名",
+    "amount": "金額",
+    "paidBy": "支払者",
+    "splitBetween": "割り勘対象",
+    "splitEvenly": "均等割り",
+    "splitCustom": "金額を入力",
+    "splitShares": "比率で割る",
+    "save": "保存",
+    "delete": "削除",
+    "addedBy": "追加者"
+  },
+  "settlement": {
+    "owes": "が支払うべき金額",
+    "markAsPaid": "送金済みにする",
+    "confirmReceived": "受け取り確認",
+    "pending": "確認待ち",
+    "markedPaid": "送金済み — 受け取り確認待ち",
+    "confirmed": "完了",
+    "allSettled": "全員の精算が完了しました！ 🎉"
+  },
+  "participant": {
+    "addMember": "メンバーを追加",
+    "namePlaceholder": "メンバーの名前",
+    "selectYourName": "このグループでのあなたは誰ですか？"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "confirm": "確認",
+    "loading": "読み込み中...",
+    "error": "エラーが発生しました",
+    "notFound": "見つかりません",
+    "back": "戻る"
+  },
+  "errors": {
+    "eventNotFound": "グループが存在しないか、削除されました。",
+    "splitMismatch": "割り勘の合計が支出金額と一致しません。",
+    "versionConflict": "データが変更されました。ページを再読み込みしてください。",
+    "unauthorized": "この操作を行う権限がありません。"
+  }
+}

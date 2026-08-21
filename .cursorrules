@@ -1,0 +1,92 @@
+# ============================================================
+# .cursorrules — Quy tắc cho AI Agent khi làm việc với project này
+# Nguồn tham chiếu: PROJECT_GUIDELINES.md mục 4
+# ============================================================
+
+## 1. Tối ưu Prisma — Chống over-fetching
+
+- CẤM dùng `include: { [relation]: true }` mặc định. Bắt buộc dùng `select` chỉ lấy
+  những field thực sự cần render.
+- Dùng `_count` khi chỉ cần đếm số lượng relation, không load toàn bộ records.
+- Tránh N+1 queries: nếu cần data của relation lồng nhau, dùng `include` + `select`
+  nested cụ thể, hoặc dùng `findMany` với `where` thay vì lặp `findUnique` trong loop.
+- Ví dụ đúng:
+  ```ts
+  prisma.event.findUnique({
+    where: { id },
+    select: { id: true, title: true, _count: { select: { participants: true } } },
+  });
+  ```
+
+## 2. Server / Client Component
+
+- Mặc định mọi component là Server Component. Không thêm `'use client'` trừ khi
+  component cần: hook React (useState, useEffect), browser API, hoặc event handler trực tiếp.
+- Chỉ dùng `'use client'` ở component lá (leaf component) — tức là component không
+  có Server Component children.
+- Data fetching (gọi Prisma, Server Action) phải nằm trong Server Component hoặc
+  Server Action, không fetch ở Client Component qua useEffect.
+
+## 3. Server Actions — Validate trước khi gọi DB
+
+- Mọi Server Action nhận input từ client PHẢI validate bằng Zod schema tương ứng
+  (trong `src/schemas/`) trước bất kỳ thao tác DB nào.
+- Không trả về raw error object của Prisma cho client. Wrap lỗi thành dạng:
+  ```ts
+  return { success: false, error: "Thông báo lỗi an toàn" };
+  ```
+- Với lỗi Prisma đặc biệt (P2002 unique constraint, P2025 record not found), map sang
+  thông báo nghiệp vụ cụ thể, không để lộ tên bảng/field DB.
+
+## 4. i18n — Không hardcode text
+
+- CẤM hardcode bất kỳ text tĩnh hiển thị lên UI. Bắt buộc dùng `useTranslations`
+  từ `next-intl` cho Client Components và `getTranslations` cho Server Components.
+- Key i18n phải được thêm vào CẢ 2 file: `messages/vi.json` VÀ `messages/ja.json`
+  cùng lúc khi thêm text mới.
+- Locale routing: toàn bộ UI nằm trong `app/[locale]/`. Middleware chỉ xử lý
+  redirect i18n, không gánh auth check.
+
+## 5. Tiền tệ — Bắt buộc dùng Int
+
+- Mọi field liên quan số tiền (amount, balance, v.v.) BẮT BUỘC dùng kiểu `Int`
+  (đơn vị nhỏ nhất: đồng VND, yên JPY).
+- CẤM dùng `Float`, `number` thập phân, hoặc `Decimal` cho amount. Lý do: sai số
+  cộng dồn (0.1 + 0.2 !== 0.3 trong IEEE 754).
+- Khi hiển thị ra UI, dùng hàm `formatCurrency` trong `src/lib/utils.ts`.
+
+## 6. Rounding khi chia tiền
+
+- Khi chia đều hoặc theo tỷ lệ, BẮT BUỘC dùng `splitEvenly()` hoặc `splitByShares()`
+  từ `src/utils/algorithm.ts` — các hàm này xử lý phần dư để tổng luôn khớp chính xác.
+- CẤM chia trực tiếp rồi làm tròn từng phần riêng lẻ (vd: `Math.round(total / n)`
+  cho mỗi người). Phần dư (remainder) phải được phân bổ vào các phần đầu tiên.
+- Server Action tạo Expense PHẢI validate:
+  ```ts
+  const splitSum = splits.reduce((acc, s) => acc + s.amount, 0);
+  if (splitSum !== expense.amount) throw new Error("Split sum mismatch");
+  ```
+  trước khi ghi vào DB trong `prisma.$transaction`.
+
+## 7. Settlement 2 chiều — Không bao giờ skip bước
+
+- CẤM set `Settlement.status = CONFIRMED` trực tiếp từ 1 action duy nhất.
+- Bắt buộc qua đúng 2 bước tách biệt:
+  1. `markAsPaid(settlementId, deviceToken)` — chỉ A (fromId) được gọi,
+     chuyển `PENDING → MARKED_PAID`.
+  2. `confirmReceived(settlementId, deviceToken)` — chỉ B (toId) được gọi,
+     chuyển `MARKED_PAID → CONFIRMED`.
+- Cả 2 action đều phải:
+  a. Đọc `deviceToken` từ cookie phía SERVER (không tin `participantId` gửi từ client).
+  b. Tìm Participant có `deviceToken` khớp, verify đúng vai (from/to).
+  c. Verify `Settlement.status` đang ở đúng trạng thái trước khi chuyển.
+- Nếu bất kỳ bước nào fail, trả lỗi rõ ràng, không thay đổi status.
+
+## 8. Optimistic Locking — Expense update
+
+- Mọi Server Action update `Expense` phải:
+  1. Nhận `currentVersion` từ client.
+  2. Dùng `prisma.expense.updateMany({ where: { id, version: currentVersion }, data: { ..., version: { increment: 1 } } })`.
+  3. Kiểm tra `count === 0` → trả lỗi "Dữ liệu đã thay đổi, vui lòng tải lại trang".
+  4. Client nhận lỗi này phải tự reload để lấy `version` mới nhất.
+- Không dùng `update` thường (không có where version) khi có nguy cơ concurrent edit.

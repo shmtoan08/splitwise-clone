@@ -1,0 +1,138 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma v7: URL quản lý hoàn toàn bởi prisma.config.ts (datasource.url)
+  // KHÔNG đặt url ở đây khi đã có prisma.config.ts
+}
+
+// ---------------------------------------------------------------------------
+// Event — Sự kiện / chuyến đi / nhóm chia tiền
+// ---------------------------------------------------------------------------
+model Event {
+  id           String        @id @default(uuid())
+  title        String
+  currency     String        @default("VND") // Tiền tệ mặc định (ISO 4217)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  participants Participant[]
+  expenses     Expense[]
+  settlements  Settlement[]
+}
+
+// ---------------------------------------------------------------------------
+// Participant — Thành viên tham gia sự kiện
+// ---------------------------------------------------------------------------
+model Participant {
+  id          String   @id @default(cuid())
+  eventId     String
+  userId      String?  // Để trống nếu là khách không đăng nhập (Phase 3)
+  name        String
+  /// Token ẩn danh gắn vào thiết bị khi chọn tên lần đầu.
+  /// Unique để 1 token chỉ map 1 participant.
+  /// Dùng để xác thực "soft identity" mà không cần đăng nhập.
+  deviceToken String?  @unique
+  /// Thông tin thanh toán (STK ngân hàng, PayPay ID, v.v.)
+  /// Dữ liệu nhạy cảm — chỉ hiển thị trong phạm vi Event của participant này.
+  paymentInfo String?
+  createdAt   DateTime @default(now())
+
+  event               Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  paidExpenses        Expense[]      @relation("PaidBy")
+  createdExpenses     Expense[]      @relation("CreatedBy")
+  owedSplits          ExpenseSplit[]
+  settlementsSent     Settlement[]   @relation("SettlementFrom")
+  settlementsReceived Settlement[]   @relation("SettlementTo")
+
+  @@index([eventId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Expense — Khoản chi tiêu
+// ---------------------------------------------------------------------------
+model Expense {
+  id    String @id @default(cuid())
+  eventId     String
+  title       String
+  /// Số tiền, đơn vị: đồng (VND) / yên (JPY) — KHÔNG dùng Float để tránh sai số
+  amount      Int
+  payerId     String
+  /// Participant đã tạo khoản chi — để hiển thị "ai đã thêm", không dùng để chặn cứng
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  /// Optimistic locking — tăng mỗi lần update để tránh 2 người ghi đè nhau
+  version     Int      @default(0)
+
+  event     Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  payer     Participant    @relation("PaidBy", fields: [payerId], references: [id])
+  createdBy Participant?   @relation("CreatedBy", fields: [createdById], references: [id])
+  splits    ExpenseSplit[]
+
+  @@index([eventId])
+  @@index([payerId])
+}
+
+// ---------------------------------------------------------------------------
+// ExpenseSplit — Phân bổ chi phí cho từng thành viên trong 1 khoản chi
+// ---------------------------------------------------------------------------
+model ExpenseSplit {
+  id            String @id @default(cuid())
+  expenseId     String
+  participantId String
+  /// Số tiền participant này phải chịu — đơn vị đồng (VND)
+  amount        Int
+
+  expense     Expense     @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  /// Ràng buộc: 1 participant chỉ xuất hiện đúng 1 lần trong 1 khoản chi
+  @@unique([expenseId, participantId])
+  @@index([participantId])
+}
+
+// ---------------------------------------------------------------------------
+// Settlement — Ghi nhận thanh toán nợ thực tế + trạng thái xác nhận 2 chiều
+// ---------------------------------------------------------------------------
+model Settlement {
+  id      String           @id @default(cuid())
+  eventId String
+  /// fromId: người trả nợ (con nợ — A)
+  fromId  String
+  /// toId: người nhận nợ (chủ nợ — B)
+  toId    String
+  /// Số tiền cần chuyển — đơn vị đồng
+  amount  Int
+  status  SettlementStatus @default(PENDING)
+  createdAt   DateTime  @default(now())
+  /// Thời điểm B xác nhận đã nhận — chỉ set khi status = CONFIRMED
+  confirmedAt DateTime?
+
+  event Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  from  Participant @relation("SettlementFrom", fields: [fromId], references: [id])
+  to    Participant @relation("SettlementTo", fields: [toId], references: [id])
+
+  @@index([eventId])
+  @@index([fromId])
+  @@index([toId])
+}
+
+// ---------------------------------------------------------------------------
+// Enum: Trạng thái thanh toán — xác nhận bắt buộc từ CẢ 2 phía
+// ---------------------------------------------------------------------------
+enum SettlementStatus {
+  /// Chưa ai bấm gì
+  PENDING
+  /// A (người nợ) đã bấm "Đã chuyển tiền" — chờ B xác nhận
+  MARKED_PAID
+  /// B (người nhận) đã bấm "Đã nhận được" — khoản nợ coi như xong
+  CONFIRMED
+}
