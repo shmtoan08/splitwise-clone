@@ -1,30 +1,58 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+import { LoginSchema } from "@/schemas/auth.schema";
 
-// NextAuth v5 config
-// Tài liệu: https://authjs.dev/getting-started/installation?framework=next.js
-//
-// Phase 3 — Auth: Google OAuth để lưu lịch sử, "Claim Event"
-// Hiện tại chỉ cần providers khai báo để middleware + route handler hoạt động
-
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, signIn, signOut, auth } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  session: { strategy: "jwt" },
   providers: [
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: process.env.AUTH_GOOGLE_ID || process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.AUTH_GOOGLE_SECRET || process.env.GOOGLE_CLIENT_SECRET || "",
+    }),
+    Credentials({
+      credentials: {
+        email: {},
+        password: {},
+      },
+      async authorize(credentials) {
+        const parsed = LoginSchema.safeParse(credentials);
+
+        if (!parsed.success) {
+          return null;
+        }
+
+        const { email, password } = parsed.data;
+
+        const user = await prisma.user.findUnique({
+          where: { email },
+        });
+
+        // Nếu không có user hoặc user đăng nhập bằng Google (không có password)
+        if (!user || !user.password) {
+          return null;
+        }
+
+        const passwordsMatch = await bcrypt.compare(password, user.password);
+
+        if (!passwordsMatch) {
+          return null;
+        }
+
+        return user;
+      },
     }),
   ],
   callbacks: {
-    // TODO: session callback — gắn userId vào session để dùng trong Server Actions
-    // TODO: "Claim Event" logic — sau khi đăng nhập, gắn sự kiện ẩn danh vào account
     session({ session, token }) {
-      if (token.sub) {
+      if (session.user && token.sub) {
         session.user.id = token.sub;
       }
       return session;
     },
-  },
-  pages: {
-    signIn: "/", // Redirect về trang chủ thay vì trang login mặc định của NextAuth
   },
 });

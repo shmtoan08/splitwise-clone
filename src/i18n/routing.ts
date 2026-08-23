@@ -11,3 +11,6 @@ export const routing = defineRouting({
   // → /vi/e/xxx sẽ trở thành /e/xxx, nhưng /ja/e/xxx vẫn giữ nguyên
   localePrefix: "as-needed",
 });
+
+import { createNavigation } from "next-intl/navigation";
+export const { Link, redirect, usePathname, useRouter } = createNavigation(routing);

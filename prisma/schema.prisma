@@ -16,11 +16,11 @@ datasource db {
 // Event — Sự kiện / chuyến đi / nhóm chia tiền
 // ---------------------------------------------------------------------------
 model Event {
-  id           String        @id @default(uuid())
-  title        String
-  currency     String        @default("VND") // Tiền tệ mặc định (ISO 4217)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id        String   @id @default(uuid())
+  title     String
+  currency  String   @default("VND") // Tiền tệ mặc định (ISO 4217)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   participants Participant[]
   expenses     Expense[]
@@ -33,33 +33,54 @@ model Event {
 model Participant {
   id          String   @id @default(cuid())
   eventId     String
-  userId      String?  // Để trống nếu là khách không đăng nhập (Phase 3)
+  userId      String? // Để trống nếu là khách không đăng nhập (Phase 3)
   name        String
   /// Token ẩn danh gắn vào thiết bị khi chọn tên lần đầu.
   /// Unique để 1 token chỉ map 1 participant.
   /// Dùng để xác thực "soft identity" mà không cần đăng nhập.
-  deviceToken String?  @unique
-  /// Thông tin thanh toán (STK ngân hàng, PayPay ID, v.v.)
-  /// Dữ liệu nhạy cảm — chỉ hiển thị trong phạm vi Event của participant này.
-  paymentInfo String?
+  deviceToken String?
   createdAt   DateTime @default(now())
 
-  event               Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  paymentInfo PaymentInfo? // 1-1, optional
+  user        User?        @relation(fields: [userId], references: [id])
+
   paidExpenses        Expense[]      @relation("PaidBy")
   createdExpenses     Expense[]      @relation("CreatedBy")
   owedSplits          ExpenseSplit[]
   settlementsSent     Settlement[]   @relation("SettlementFrom")
   settlementsReceived Settlement[]   @relation("SettlementTo")
 
+  @@unique([eventId, deviceToken])
   @@index([eventId])
   @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// PaymentInfo — Thông tin thanh toán (1-1 với Participant)
+// ---------------------------------------------------------------------------
+model PaymentInfo {
+  id            String @id @default(cuid())
+  participantId String @unique // 1-1: mỗi participant chỉ có 1 payment info
+
+  // VietQR (Việt Nam)
+  bankBIN       String? // mã ngân hàng theo chuẩn VietQR
+  accountNumber String?
+  accountName   String?
+
+  // PayPay (Nhật) — để dành cho task ngày mai, KHÔNG code phần này hôm nay
+  paypayLink String?
+
+  updatedAt DateTime @updatedAt
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 }
 
 // ---------------------------------------------------------------------------
 // Expense — Khoản chi tiêu
 // ---------------------------------------------------------------------------
 model Expense {
-  id    String @id @default(cuid())
+  id          String   @id @default(cuid())
   eventId     String
   title       String
   /// Số tiền, đơn vị: đồng (VND) / yên (JPY) — KHÔNG dùng Float để tránh sai số
@@ -103,16 +124,16 @@ model ExpenseSplit {
 // Settlement — Ghi nhận thanh toán nợ thực tế + trạng thái xác nhận 2 chiều
 // ---------------------------------------------------------------------------
 model Settlement {
-  id      String           @id @default(cuid())
-  eventId String
+  id          String           @id @default(cuid())
+  eventId     String
   /// fromId: người trả nợ (con nợ — A)
-  fromId  String
+  fromId      String
   /// toId: người nhận nợ (chủ nợ — B)
-  toId    String
+  toId        String
   /// Số tiền cần chuyển — đơn vị đồng
-  amount  Int
-  status  SettlementStatus @default(PENDING)
-  createdAt   DateTime  @default(now())
+  amount      Int
+  status      SettlementStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
   /// Thời điểm B xác nhận đã nhận — chỉ set khi status = CONFIRMED
   confirmedAt DateTime?
 
@@ -135,4 +156,64 @@ enum SettlementStatus {
   MARKED_PAID
   /// B (người nhận) đã bấm "Đã nhận được" — khoản nợ coi như xong
   CONFIRMED
+}
+
+// ---------------------------------------------------------------------------
+// NextAuth / Auth.js Models (Phase 3)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String        @id @default(cuid())
+  name          String?
+  email         String?       @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  participants  Participant[] // Một user có thể join nhiều events
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
 }

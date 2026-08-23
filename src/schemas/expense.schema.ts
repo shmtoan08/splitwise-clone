@@ -54,7 +54,7 @@ export const splitModeSchema = z.discriminatedUnion("mode", [
 // Main expense schema
 // ---------------------------------------------------------------------------
 
-export const addExpenseSchema = z.object({
+const expenseBaseSchema = z.object({
   eventId: z.string().uuid("eventId phải là UUID"),
   title: z
     .string()
@@ -70,12 +70,40 @@ export const addExpenseSchema = z.object({
   splitConfig: splitModeSchema,
 });
 
+export const addExpenseSchema = expenseBaseSchema.refine(
+  (data) => {
+    if (data.splitConfig.mode === "CUSTOM") {
+      const sum = data.splitConfig.splits.reduce((acc, split) => acc + split.amount, 0);
+      return sum === data.amount;
+    }
+    return true;
+  },
+  {
+    message: "Tổng số tiền chia chi tiết không khớp với tổng khoản chi.",
+    path: ["splitConfig"],
+  }
+);
+
 export type AddExpenseInput = z.infer<typeof addExpenseSchema>;
 
-export const updateExpenseSchema = addExpenseSchema.extend({
-  id: z.string().cuid(),
-  /** Bắt buộc để thực hiện optimistic locking */
-  currentVersion: z.number().int().min(0),
-});
+export const updateExpenseSchema = expenseBaseSchema
+  .extend({
+    id: z.string().cuid(),
+    /** Bắt buộc để thực hiện optimistic locking */
+    currentVersion: z.number().int().min(0),
+  })
+  .refine(
+    (data) => {
+      if (data.splitConfig.mode === "CUSTOM") {
+        const sum = data.splitConfig.splits.reduce((acc, split) => acc + split.amount, 0);
+        return sum === data.amount;
+      }
+      return true;
+    },
+    {
+      message: "Tổng số tiền chia chi tiết không khớp với tổng khoản chi.",
+      path: ["splitConfig"],
+    }
+  );
 
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;

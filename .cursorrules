@@ -90,3 +90,15 @@
   3. Kiểm tra `count === 0` → trả lỗi "Dữ liệu đã thay đổi, vui lòng tải lại trang".
   4. Client nhận lỗi này phải tự reload để lấy `version` mới nhất.
 - Không dùng `update` thường (không có where version) khi có nguy cơ concurrent edit.
+
+### 9. UI/UX & STYLING RULES (TAILWIND + SHADCN/UI)
+- **Tuyệt đối không tự viết CSS thuần:** Mọi style BẮT BUỘC dùng Tailwind CSS classes.
+- **Ưu tiên dùng Component của shadcn/ui:** Khi cần UI elements (như nút bấm, modal, form input, tabs), hãy tìm và import từ `@/components/ui/` (shadcn/ui) thay vì dùng thẻ HTML thô (`<button>`, `<input>`).
+- **Mobile-First Development:** 
+  - KHÔNG BAO GIỜ code cứng kích thước (VD: `w-[800px]`). 
+  - Luôn bắt đầu bằng class mobile (VD: `p-4 flex-col`), sau đó dùng breakpoint cho Desktop (VD: `md:p-8 md:flex-row`).
+- **Màu sắc & Phông chữ Semantic:**
+  - Dùng `text-muted-foreground` cho các text phụ, mô tả.
+  - Dùng hệ thống màu của Tailwind/shadcn (VD: `bg-primary`, `text-destructive`) thay vì hardcode mã màu HEX (VD: `bg-[#ff0000]`).
+- **Interactive Feedback:** Mọi nút bấm (Button, Card có thể click) BẮT BUỘC phải có hiệu ứng `hover:`, `active:`, và `transition-colors` để người dùng biết họ đang tương tác.
+- **Xử lý Layout Tràn viền (Overflow):** Khi hiển thị danh sách dài (Expense List, Participant List), hãy thêm `overflow-y-auto` và ẩn thanh cuộn (scrollbar-hide) để giao diện nhìn như App Mobile gốc.

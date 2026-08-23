@@ -1,15 +1,15 @@
 import { z } from "zod";
 
-export const markAsPaidSchema = z.object({
-  settlementId: z.string().cuid(),
-  // Không nhận participantId từ client — phải đọc từ cookie phía server
+export const MarkAsPaidSchema = z.object({
+  eventId: z.string().uuid("eventId phải là UUID hợp lệ"),
+  fromId: z.string().cuid("fromId phải là CUID hợp lệ"),
+  toId: z.string().cuid("toId phải là CUID hợp lệ"),
+  amount: z
+    .number()
+    .int("Số tiền phải là số nguyên")
+    .positive("Số tiền phải lớn hơn 0"),
 });
 
-export type MarkAsPaidInput = z.infer<typeof markAsPaidSchema>;
-
-export const confirmReceivedSchema = z.object({
-  settlementId: z.string().cuid(),
-  // Không nhận participantId từ client — phải đọc từ cookie phía server
+export const ConfirmReceivedSchema = z.object({
+  settlementId: z.string().cuid("settlementId phải là CUID hợp lệ"),
 });
-
-export type ConfirmReceivedInput = z.infer<typeof confirmReceivedSchema>;

@@ -81,3 +81,12 @@ Khi có mâu thuẫn giữa các tài liệu, thứ tự ưu tiên:
 3. `PROJECT_GUIDELINES.md` (file này) — cho quy tắc hành vi, business logic, và scope theo Phase
 
 File này nên được cập nhật lại mỗi khi có quyết định thiết kế mới được thống nhất, để AI agent luôn có 1 nguồn rule ngắn gọn, đầy đủ, không cần tự suy luận lại từ các cuộc trò chuyện trước.
+
+## 7. UI/UX & Design Guidelines (Giao diện & Trải nghiệm)
+- **Tư duy Mobile-First:** Mọi component phải được thiết kế tối ưu cho màn hình điện thoại trước (`w-full`), sau đó mới dùng các breakpoint (`md:`, `lg:`) để mở rộng cho màn hình Desktop.
+- **Tối giản (Minimalism) & "Zero-Barrier":** Thiết kế tập trung vào tính năng "Tạo nhóm trong 1 click" và "Chia sẻ 1-Click" qua URL/QR code. Loại bỏ mọi yếu tố thị giác thừa mứa.
+- **Shadcn/ui là cốt lõi:** Luôn ưu tiên dùng các component có sẵn của shadcn/ui (Card, Button, Dialog, Drawer, Tabs) trước khi tự code UI custom.
+- **Tương tác mượt mà:** 
+  - Form thêm chi phí trên Mobile nên ưu tiên dùng `Drawer` (hiện từ dưới lên) thay vì `Dialog` (hiện giữa màn hình) để thao tác bằng một tay dễ dàng.
+  - Sử dụng Skeleton Loading (của shadcn) để tạo hiệu ứng tải trang mượt mà khi fetch dữ liệu, không dùng vòng quay spinner nhàm chán.
+- **Hiển thị Số tiền:** Mọi con số tiền tệ phải luôn được format có dấu phân cách (VD: `100,000` thay vì `100000`) và text được highlight màu xanh/đỏ rõ ràng khi hiển thị trạng thái Nợ/Được nhận.

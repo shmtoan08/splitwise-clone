@@ -62,8 +62,8 @@ export function splitEvenly(
   if (participantIds.length === 0) {
     throw new Error("splitEvenly: participantIds không được rỗng");
   }
-  if (totalAmount < 0) {
-    throw new Error("splitEvenly: totalAmount không được âm");
+  if (totalAmount <= 0) {
+    throw new Error("splitEvenly: totalAmount phải lớn hơn 0");
   }
 
   const n = participantIds.length;
@@ -71,11 +71,15 @@ export function splitEvenly(
   // Số người nhận thêm 1 đồng phần dư
   const remainder = totalAmount - base * n;
 
-  return participantIds.map((id, index) => ({
+  const result = participantIds.map((id, index) => ({
     participantId: id,
     // index < remainder: người đầu nhận thêm 1 đồng lẻ
     amount: index < remainder ? base + 1 : base,
   }));
+
+  validateSplitSum(totalAmount, result);
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,8 +116,8 @@ export function splitByShares(
   if (participants.length === 0) {
     throw new Error("splitByShares: participants không được rỗng");
   }
-  if (totalAmount < 0) {
-    throw new Error("splitByShares: totalAmount không được âm");
+  if (totalAmount <= 0) {
+    throw new Error("splitByShares: totalAmount phải lớn hơn 0");
   }
 
   const totalShares = participants.reduce((sum, p) => sum + p.shares, 0);
@@ -142,10 +146,14 @@ export function splitByShares(
   }
 
   // Trả về theo thứ tự ban đầu của participants
-  return participants.map((p) => ({
+  const result = participants.map((p) => ({
     participantId: p.participantId,
     amount: sorted.find((s) => s.participantId === p.participantId)!.amount,
   }));
+
+  validateSplitSum(totalAmount, result);
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,10 +230,18 @@ export function calculateBalances(
     }
   }
 
-  return participantIds.map((id) => ({
+  const result = participantIds.map((id) => ({
     id,
     balance: balanceMap.get(id) ?? 0,
   }));
+
+  // Assertion: Tổng tất cả balance luôn phải bằng 0 (vì tiền không tự sinh ra hay mất đi)
+  const totalBalance = result.reduce((sum, b) => sum + b.balance, 0);
+  if (totalBalance !== 0) {
+    throw new Error(`Lỗi hệ thống: Tổng balance không bằng 0 (lệch ${totalBalance}đ). Dữ liệu bị sai lệch.`);
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
