@@ -80,14 +80,14 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
     let calculatedSplits: Array<{ participantId: string; amount: number }> = [];
     let participantIds: string[] = [];
 
-    if (splitConfig.mode === "EVEN") {
-      calculatedSplits = splitEvenly(finalAmount, splitConfig.participantIds);
-      participantIds = splitConfig.participantIds;
+    if (splitConfig.mode === "AMOUNT") {
+      calculatedSplits = splitConfig.splits.map((s) => ({
+        participantId: s.participantId,
+        amount: Math.round(s.amount * (snapshotRate || 1)),
+      }));
+      participantIds = splitConfig.splits.map((s) => s.participantId);
     } else if (splitConfig.mode === "SHARES") {
       calculatedSplits = splitByShares(finalAmount, splitConfig.splits);
-      participantIds = splitConfig.splits.map((s) => s.participantId);
-    } else if (splitConfig.mode === "CUSTOM") {
-      calculatedSplits = splitByCustomAmount(finalAmount, splitConfig.splits);
       participantIds = splitConfig.splits.map((s) => s.participantId);
     }
 
@@ -209,12 +209,14 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
     // 3. Tính splits
     let calculatedSplits: Array<{ participantId: string; amount: number }> = [];
 
-    if (splitConfig.mode === "EVEN") {
-      calculatedSplits = splitEvenly(finalAmount, splitConfig.participantIds);
+    if (splitConfig.mode === "AMOUNT") {
+      const rate = snapshotRate ? snapshotRate.toNumber() : (existingExpense.exchangeRate?.toNumber() ?? 1);
+      calculatedSplits = splitConfig.splits.map((s) => ({
+        participantId: s.participantId,
+        amount: Math.round(s.amount * rate),
+      }));
     } else if (splitConfig.mode === "SHARES") {
       calculatedSplits = splitByShares(finalAmount, splitConfig.splits);
-    } else if (splitConfig.mode === "CUSTOM") {
-      calculatedSplits = splitByCustomAmount(finalAmount, splitConfig.splits);
     }
 
     validateSplitSum(finalAmount, calculatedSplits);

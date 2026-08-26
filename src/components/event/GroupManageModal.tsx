@@ -14,6 +14,7 @@ import { useParticipantIdentity } from "@/hooks/useParticipantIdentity";
 type Participant = {
   id: string;
   name: string;
+  deviceToken: string | null;
 };
 
 type Group = {

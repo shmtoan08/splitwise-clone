@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addExpense, updateExpense, deleteExpense } from "@/actions/expense";
-import EvenSplit from "./split-modes/EvenSplit";
+
 import CustomAmountSplit from "./split-modes/CustomAmountSplit";
 import SharesSplit from "./split-modes/SharesSplit";
 import { splitEvenly } from "@/utils/algorithm";
