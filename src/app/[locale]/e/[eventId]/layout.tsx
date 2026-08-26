@@ -32,15 +32,23 @@ export default async function EventLayout({ children, params }: Props) {
   const deviceToken = cookieStore.get("split-app-device-token")?.value;
   const isCreator = !!(deviceToken && event.creatorDeviceToken === deviceToken);
 
+  const titleLength = event.title.length;
+  let titleSizeClass = "text-xl sm:text-2xl";
+  if (titleLength > 30 && titleLength <= 60) {
+    titleSizeClass = "text-lg sm:text-xl";
+  } else if (titleLength > 60) {
+    titleSizeClass = "text-base sm:text-lg";
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      
+      {/* 1. TOP HEADER: Chỉ chứa điều hướng và công cụ (Rất thoáng) */}
       <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-xl shadow-sm">
         <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex items-center justify-between gap-2">
           
-          {/* CỤM TRÁI: Nút Back + Tiêu đề (Đã xử lý min-w-0 để không vỡ layout) */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-            
-            {/* PHƯƠNG ÁN 2: Nút Back Responsive & Micro-interaction */}
+          {/* CỤM TRÁI: Chỉ còn nút Back */}
+          <div className="flex items-center">
             <Link 
               href="/" 
               className={buttonVariants({ 
@@ -53,19 +61,9 @@ export default async function EventLayout({ children, params }: Props) {
                 {tCommon("home")}
               </span>
             </Link>
-            
-            {/* Tiêu đề nhóm */}
-            <div className="flex flex-col leading-tight min-w-0">
-              <h1 className="font-bold text-slate-900 text-base sm:text-lg tracking-tight truncate">
-                {event.title}
-              </h1>
-              <span className="text-[11px] sm:text-xs font-medium text-slate-500 mt-0.5 truncate">
-                {t("memberCount", { count: event.participants.length })}
-              </span>
-            </div>
           </div>
 
-          {/* CỤM PHẢI: shrink-0 để giữ nguyên kích thước các nút hành động */}
+          {/* CỤM PHẢI: Các nút công cụ giữ nguyên */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {isCreator && (
               <AdvancedModeSwitch eventId={event.id} isAdvancedMode={event.isAdvancedMode} />
@@ -84,6 +82,18 @@ export default async function EventLayout({ children, params }: Props) {
       {/* Container Chính */}
       <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-0 sm:px-6 lg:px-8 bg-transparent sm:my-6 overflow-hidden relative">
         <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden bg-white sm:shadow-md sm:rounded-3xl sm:border border-slate-200/60">
+          
+          {/* 2. SUB-HEADER: Tiêu đề nhóm được đưa xuống đây */}
+          <div className="px-4 py-4 sm:px-6 border-b border-slate-100 bg-white shrink-0">
+            <h1 className={`font-extrabold text-slate-900 break-words leading-tight line-clamp-2 ${titleSizeClass}`}>
+              {event.title}
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1.5">
+              {t("memberCount", { count: event.participants.length })}
+            </p>
+          </div>
+
+          {/* Vùng chứa nội dung các Tabs */}
           {children}
         </div>
       </main>

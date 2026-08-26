@@ -72,8 +72,48 @@ export async function addParticipant(
   }
 }
 
-export async function removeParticipant(_participantId: string) {
-  throw new Error("Not implemented yet");
+export async function deleteParticipant(eventId: string, participantId: string): Promise<ActionResult> {
+  const cookieStore = await cookies();
+  const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+
+  if (!deviceToken) {
+    return { success: false, error: "unauthorized" };
+  }
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { creatorDeviceToken: true },
+  });
+
+  if (!event || event.creatorDeviceToken !== deviceToken) {
+    return { success: false, error: "unauthorized" };
+  }
+
+  try {
+    // Safety Check
+    const expensesAsPayer = await prisma.expense.count({
+      where: { payerId: participantId },
+    });
+
+    const expensesAsSplit = await prisma.expenseSplit.count({
+      where: { participantId },
+    });
+
+    if (expensesAsPayer > 0 || expensesAsSplit > 0) {
+      return { success: false, error: "HAS_EXPENSES" };
+    }
+
+    // Safe to delete
+    await prisma.participant.delete({
+      where: { id: participantId },
+    });
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("[deleteParticipant] error:", error);
+    return { success: false, error: "Lỗi hệ thống. Vui lòng thử lại sau." };
+  }
 }
 
 export async function claimParticipantIdentity(

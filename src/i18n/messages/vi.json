@@ -142,7 +142,11 @@
     "adults": "Người lớn",
     "children": "Trẻ em",
     "addChild": "Thêm trẻ em",
-    "totalWeight": "Tổng hệ số: {total}"
+    "totalWeight": "Tổng hệ số: {total}",
+    "deleteMemberTitle": "Xóa thành viên",
+    "deleteMemberConfirm": "Bạn có chắc chắn muốn xóa thành viên này?",
+    "deleteMemberSuccess": "Đã xóa thành viên.",
+    "memberHasExpenses": "Không thể xóa vì người này đang tham gia vào các khoản chi. Vui lòng gỡ họ ra khỏi các hóa đơn trước!"
   },
   "paymentInfo": {
     "dialogTitle": "Cài đặt thông tin nhận tiền",
@@ -168,6 +172,8 @@
     "cancel": "Huỷ",
     "delete": "Xoá",
     "confirm": "Xác nhận",
+    "success": "Thành công",
+    "unauthorized": "Không có quyền thực hiện.",
     "loading": "Đang tải...",
     "error": "Đã xảy ra lỗi",
     "notFound": "Không tìm thấy",

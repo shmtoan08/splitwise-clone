@@ -12,9 +12,10 @@ import SettlementTabClient from "./SettlementTabClient";
 
 type Props = {
   event: any; 
+  isCreator?: boolean;
 };
 
-export default function EventTabsClient({ event }: Props) {
+export default function EventTabsClient({ event, isCreator }: Props) {
   const t = useTranslations("event");
   const [activeTab, setActiveTab] = useState("members");
 
@@ -64,7 +65,7 @@ export default function EventTabsClient({ event }: Props) {
         {/* Content Area */}
         <div className="flex-1 min-h-0 relative overflow-hidden bg-slate-50">
           <TabsContent value="members" className="absolute inset-0 m-0 data-[state=inactive]:hidden flex flex-col animate-in fade-in duration-300">
-            <MembersTabClient event={event} />
+            <MembersTabClient event={event} isCreator={isCreator} />
           </TabsContent>
 
           <TabsContent value="expenses" className="absolute inset-0 m-0 data-[state=inactive]:hidden flex flex-col animate-in fade-in duration-300">

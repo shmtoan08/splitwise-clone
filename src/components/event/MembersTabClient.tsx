@@ -3,19 +3,19 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useParticipantIdentity } from "@/hooks/useParticipantIdentity";
-import { addParticipant } from "@/actions/participant";
+import { addParticipant, deleteParticipant } from "@/actions/participant";
 import { updateParticipantBudgets } from "@/actions/budget";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, User, Settings2, Users, Wallet, Plus } from "lucide-react";
+import { UserPlus, User, Settings2, Users, Wallet, Trash2 } from "lucide-react";
+import { useAlert } from "@/providers/AlertProvider";
 import PaymentInfoForm from "@/components/event/PaymentInfoForm";
 import GroupManageModal from "./GroupManageModal";
 import FamilyConfigModal from "./FamilyConfigModal";
 import { formatCurrency } from "@/lib/utils";
 
-// ... (Các Type định nghĩa giữ nguyên) ...
 type PaymentInfo = {
   bankBIN: string | null;
   accountNumber: string | null;
@@ -49,9 +49,10 @@ type Props = {
     participants: Participant[];
     groups: Group[];
   };
+  isCreator?: boolean;
 };
 
-export default function MembersTabClient({ event }: Props) {
+export default function MembersTabClient({ event, isCreator }: Props) {
   const { id: eventId, isAdvancedMode, participants, groups } = event;
   const t = useTranslations("participant");
   const tPayment = useTranslations("paymentInfo");
@@ -59,6 +60,7 @@ export default function MembersTabClient({ event }: Props) {
   const tGroup = useTranslations("group");
   const tBudget = useTranslations("budget");
   const { isCurrentParticipant } = useParticipantIdentity(participants);
+  const { showAlert } = useAlert();
 
   const [newName, setNewName] = useState("");
   const [isAdding, setIsAdding] = useState(false);
@@ -178,9 +180,9 @@ export default function MembersTabClient({ event }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full relative bg-slate-50">
-      {/* Tinh chỉnh lại padding bottom (pb-28) để cuộn danh sách không bị che bởi footer nổi */}
-      <div className="flex-1 px-3 sm:px-6 py-4 overflow-y-auto pb-28 scrollbar-hide">
+    <div className="flex-1 flex flex-col h-full relative bg-slate-50 overflow-hidden">
+      {/* Vùng nội dung cuộn */}
+      <div className="flex-1 px-3 sm:px-6 py-4 overflow-y-auto pb-4 scrollbar-hide">
         
         {/* Header Summary & Actions */}
         <div className="flex flex-wrap gap-2 items-center justify-between mb-4 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm">
@@ -228,7 +230,6 @@ export default function MembersTabClient({ event }: Props) {
           </div>
         ) : (
           <ul className="space-y-2.5">
-            {/* Nội dung render danh sách giữ nguyên như cũ */}
             {sortedParticipants.map((p) => {
               const isMe = isCurrentParticipant(p.id);
               const pGroups = groups.filter(g => g.members.some(m => m.participantId === p.id));
@@ -312,7 +313,6 @@ export default function MembersTabClient({ event }: Props) {
                   </div>
 
                   <div className="shrink-0 flex items-center gap-1.5">
-                    {/* Family Config Icon (for everyone) */}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -338,17 +338,48 @@ export default function MembersTabClient({ event }: Props) {
                             />
                           }
                         >
-                        <Settings2 className="w-4 h-4" />
-                        <span className="sr-only">{t("setupPayment")}</span>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[400px] w-[95vw] rounded-3xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
-                        <DialogHeader>
-                          <DialogTitle className="text-xl font-bold text-slate-900 text-center">{tPayment("dialogTitle")}</DialogTitle>
-                        </DialogHeader>
-                        <PaymentInfoForm eventId={eventId} currentPaymentInfo={p.paymentInfo ?? null} onSuccess={() => setOpenDialogId(null)} />
-                      </DialogContent>
-                    </Dialog>
-                  )}
+                          <Settings2 className="w-4 h-4" />
+                          <span className="sr-only">{t("setupPayment")}</span>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[400px] w-[95vw] rounded-3xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle className="text-xl font-bold text-slate-900 text-center">{tPayment("dialogTitle")}</DialogTitle>
+                          </DialogHeader>
+                          <PaymentInfoForm eventId={eventId} currentPaymentInfo={p.paymentInfo ?? null} onSuccess={() => setOpenDialogId(null)} />
+                        </DialogContent>
+                      </Dialog>
+                    )}
+
+                    {isCreator && p.name !== "🏢 Quỹ Công ty" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 w-9 h-9 rounded-full text-rose-500 hover:bg-rose-50 hover:text-rose-600 active:scale-95 transition-all"
+                        title={t("deleteMemberTitle")}
+                        onClick={() => {
+                          showAlert({
+                            type: "warning",
+                            title: t("deleteMemberTitle"),
+                            message: t("deleteMemberConfirm"),
+                            confirmText: tCommon("delete") || "Xóa",
+                            onConfirm: async () => {
+                              const res = await deleteParticipant(eventId, p.id);
+                              if (!res.success) {
+                                if (res.error === "HAS_EXPENSES") {
+                                  showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: t("memberHasExpenses") });
+                                } else {
+                                  showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: tCommon("unauthorized") || "Không có quyền thực hiện." });
+                                }
+                              } else {
+                                showAlert({ type: "success", title: tCommon("success") || "Thành công", message: t("deleteMemberSuccess") });
+                              }
+                            }
+                          });
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </li>
               );
@@ -357,52 +388,43 @@ export default function MembersTabClient({ event }: Props) {
         )}
       </div>
 
-      {/* CẢI TIẾN FOOTER TẠI ĐÂY */}
-      {/* Thay border-t cứng nhắc bằng gradient mờ dần (iOS style floating bar) */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-slate-50 via-slate-50/95 to-transparent pt-8 pb-4 px-4 sm:px-6 pointer-events-none">
-        
-        {/* Khung chứa nội dung (bật lại pointer-events) */}
-        <div className="pointer-events-auto max-w-5xl mx-auto w-full flex flex-col items-center">
+      {/* FOOTER NEO CỐ ĐỊNH Ở ĐÁY MÀN HÌNH (Sticky Bottom Floating Bar) */}
+      <div className="sticky bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-slate-50 via-slate-50/95 to-transparent pt-6 pb-3 sm:pb-4 px-3 sm:px-6 pointer-events-none shrink-0">
+        <div className="pointer-events-auto max-w-2xl mx-auto w-full flex flex-col items-center">
           
           {error && (
-            <div className="mb-2 bg-rose-50 text-rose-600 text-xs font-semibold px-3 py-1.5 rounded-full border border-rose-100 shadow-sm animate-in slide-in-from-bottom-2">
+            <div className="mb-2 bg-rose-50 text-rose-600 text-xs font-semibold px-3 py-1 rounded-full border border-rose-100 shadow-sm animate-in slide-in-from-bottom-2">
               {error}
             </div>
           )}
           
-          {/* Unified Input Bar (Gộp Input và Button vào chung 1 khối) */}
-          <div className="relative flex items-center bg-white rounded-2xl sm:rounded-full shadow-md shadow-slate-200/50 border border-slate-200/80 focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/10 transition-all duration-300 p-1.5 w-full sm:max-w-xl">
-            
-            {/* Icon trang trí bên trái */}
-            <div className="pl-3 pr-2 text-slate-400">
-              <UserPlus className="w-5 h-5" />
+          {/* Thanh Input hợp nhất co giãn linh hoạt */}
+          <div className="relative flex items-center bg-white rounded-full shadow-md shadow-slate-200/60 border border-slate-200/80 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all p-1 sm:p-1.5 w-full">
+            <div className="pl-3 pr-1.5 text-slate-400 shrink-0">
+              <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             
-            {/* Input không viền */}
             <Input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAddMember()}
               placeholder={t("addMemberPlaceholder")}
-              className="flex-1 h-11 border-0 shadow-none bg-transparent focus-visible:ring-0 text-sm sm:text-base px-0 placeholder:text-slate-400"
+              className="flex-1 h-9 sm:h-10 border-0 shadow-none bg-transparent focus-visible:ring-0 text-xs sm:text-sm px-0 placeholder:text-slate-400 min-w-0"
               disabled={isAdding}
             />
             
-            {/* Button nằm gọn bên trong Input */}
             <Button
               onClick={handleAddMember}
               disabled={isAdding || !newName.trim()}
-              className="h-11 px-4 sm:px-6 rounded-xl sm:rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold active:scale-95 transition-all shrink-0 ml-2"
+              className="h-9 sm:h-10 px-4 sm:px-5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm active:scale-95 transition-all shrink-0 ml-1.5 whitespace-nowrap"
             >
-              <span className="hidden sm:inline text-sm">{t("addButton")}</span>
-              <Plus className="w-5 h-5 sm:hidden" /> {/* Thu gọn thành Icon Plus trên Mobile */}
+              <span>{t("addButton")}</span>
             </Button>
-            
           </div>
         </div>
       </div>
 
-      {/* Các Modal */}
+      {/* Modals */}
       <GroupManageModal 
         open={groupModalOpen} 
         onOpenChange={setGroupModalOpen} 
@@ -412,7 +434,6 @@ export default function MembersTabClient({ event }: Props) {
         existingGroups={groups}
       />
 
-      {/* Family Config Modal */}
       <FamilyConfigModal
         eventId={eventId}
         participant={participants.find(p => p.id === familyConfigParticipantId)}

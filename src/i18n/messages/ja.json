@@ -142,7 +142,11 @@
     "adults": "大人",
     "children": "子供",
     "addChild": "子供を追加",
-    "totalWeight": "合計係数: {total}"
+    "totalWeight": "合計係数: {total}",
+    "deleteMemberTitle": "メンバーを削除",
+    "deleteMemberConfirm": "このメンバーを削除してもよろしいですか？",
+    "deleteMemberSuccess": "メンバーを削除しました。",
+    "memberHasExpenses": "このメンバーは支払いに参加しているため削除できません。まず支払いから外してください。"
   },
   "paymentInfo": {
     "dialogTitle": "受取情報を設定",
@@ -168,6 +172,8 @@
     "cancel": "キャンセル",
     "delete": "削除",
     "confirm": "確認",
+    "success": "成功",
+    "unauthorized": "権限がありません。",
     "loading": "読み込み中...",
     "error": "エラーが発生しました",
     "notFound": "見つかりません",
