@@ -13,6 +13,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { useAlert } from "@/providers/AlertProvider";
+
 
 type Props = {
   eventId: string;
@@ -20,6 +22,8 @@ type Props = {
 
 export default function ShareButton({ eventId }: Props) {
   const t = useTranslations("event");
+  const { showAlert } = useAlert();
+
   const [url, setUrl] = useState("");
   const [isCopied, setIsCopied] = useState(false);
   const [canShare, setCanShare] = useState(false);
@@ -44,12 +48,20 @@ export default function ShareButton({ eventId }: Props) {
         setIsCopied(true);
         setTimeout(() => setIsCopied(false), 2000);
       } else {
-        // Fallback for older browsers
-        alert(t("copyLink") + ":\n" + url);
+        // Fallback: hiển thị alert đẹp thay vì browser alert()
+        showAlert({
+          type: "info",
+          title: t("copyLink"),
+          message: url,
+        });
       }
     } catch (err) {
       console.error("Failed to copy", err);
-      alert("Không thể sao chép liên kết.");
+      showAlert({
+        type: "error",
+        title: t("errorCopyLinkTitle"),
+        message: t("errorCopyLinkMessage"),
+      });
     }
   };
 

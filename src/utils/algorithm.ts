@@ -88,7 +88,7 @@ export function splitEvenly(
 
 export type ShareInput = {
   participantId: string;
-  /** Số phần (shares) participant này nhận. Phải là số nguyên dương. */
+  /** Số phần (shares) participant này nhận. Có thể là số thập phân dương (VD: 1.5, 2.0). */
   shares: number;
 };
 

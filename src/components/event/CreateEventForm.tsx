@@ -2,6 +2,7 @@
 
 import { useTransition, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "@/i18n/routing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createEvent } from "@/actions/event";
@@ -10,6 +11,7 @@ import { ArrowRight } from "lucide-react";
 export default function CreateEventForm() {
   const t = useTranslations("home");
   const tCommon = useTranslations("common");
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +25,9 @@ export default function CreateEventForm() {
 
     startTransition(async () => {
       const result = await createEvent({ title });
-      if (result && !result.success) {
+      if (result && result.success && result.data?.eventId) {
+        router.push(`/e/${result.data.eventId}`);
+      } else if (result && !result.success) {
         setError(result.error);
       }
     });

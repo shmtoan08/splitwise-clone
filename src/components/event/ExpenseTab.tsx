@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import ExpenseForm from "./ExpenseForm";
-import { Wallet, Plus } from "lucide-react";
+import { Wallet, Plus, ReceiptText, Calendar, Users } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 type Participant = {
   id: string;
@@ -18,7 +19,18 @@ type Expense = {
   payerId: string;
   version: number;
   createdAt: Date;
+  expenseDate?: Date;
+  isCrossSubsidy: boolean;
+  originalCurrency?: string | null;
+  exchangeRate?: any;
+  splitMode?: "AMOUNT" | "SHARES";
   splits: { participantId: string; amount: number }[];
+};
+
+type Group = {
+  id: string;
+  name: string;
+  members: { participantId: string }[];
 };
 
 type Props = {
@@ -26,15 +38,19 @@ type Props = {
   participants: Participant[];
   expenses: Expense[];
   currency: string;
+  groups?: Group[];
 };
 
-export default function ExpenseTab({ eventId, participants, expenses, currency }: Props) {
+export default function ExpenseTab({ eventId, participants, expenses, currency, groups = [] }: Props) {
   const t = useTranslations("event");
   const tExpense = useTranslations("expense");
+  const tBudget = useTranslations("budget");
+
   const [selectedExpense, setSelectedExpense] = useState<Expense | undefined>(undefined);
   const [formOpen, setFormOpen] = useState(false);
 
   const handleOpenEdit = (exp: Expense) => {
+    if (exp.isCrossSubsidy) return;
     setSelectedExpense(exp);
     setFormOpen(true);
   };
@@ -45,37 +61,79 @@ export default function ExpenseTab({ eventId, participants, expenses, currency }
   };
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide bg-slate-50 relative pb-28">
+    <div className="flex-1 h-full relative overflow-hidden bg-slate-50">
+      <div className="absolute inset-0 overflow-y-auto scrollbar-hide pb-36 lg:pb-12">
       {expenses.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-[50vh] text-slate-400 text-sm gap-3">
-          <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
-            <Wallet className="w-8 h-8 text-slate-300" />
+        <div className="flex flex-col items-center justify-center h-[50vh] text-slate-400 text-sm gap-4 w-full mx-auto animate-in fade-in duration-500">
+          <div className="w-20 h-20 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center">
+            <ReceiptText className="w-10 h-10 text-slate-300" />
           </div>
-          {tExpense("noExpenses")}
+          <p className="font-medium text-slate-500">{tExpense("noExpenses")}</p>
         </div>
       ) : (
-        <ul className="space-y-3 p-4">
+        // FIX 2: Sửa max-w-3xl thành max-w-5xl, tinh chỉnh responsive padding chuẩn PC/Mobile
+        <ul className="space-y-3 p-3 sm:p-6 lg:p-8 w-full max-w-5xl mx-auto">
           {expenses.map((exp) => {
             const payer = participants.find((p) => p.id === exp.payerId)?.name || tExpense("anonymous");
             return (
               <li
                 key={exp.id}
                 onClick={() => handleOpenEdit(exp)}
-                className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:bg-slate-50 transition-all active:scale-[0.98] cursor-pointer"
+                className={`p-4 sm:p-5 bg-white border rounded-2xl transition-all duration-200 active:scale-[0.98] ${
+                  exp.isCrossSubsidy
+                    ? "border-emerald-200 bg-emerald-50/50 shadow-sm cursor-default"
+                    : "border-slate-200/80 shadow-sm hover:shadow-md hover:border-blue-200 cursor-pointer"
+                }`}
               >
-                <div className="flex justify-between items-start mb-2 gap-4">
-                  <h4 className="font-semibold text-slate-900 leading-tight">{exp.title}</h4>
-                  <span className="font-bold text-slate-900 font-mono shrink-0">
-                    {formatCurrency(exp.amount, { currency })}
-                  </span>
+                <div className="flex justify-between items-start mb-3 gap-4">
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center ${exp.isCrossSubsidy ? 'bg-emerald-100' : 'bg-blue-50'}`}>
+                      <ReceiptText className={`w-5 h-5 ${exp.isCrossSubsidy ? 'text-emerald-600' : 'text-blue-500'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-slate-900 text-base sm:text-lg leading-tight truncate">{exp.title}</h4>
+                      {exp.isCrossSubsidy && (
+                        <Badge className="mt-1 text-[9px] bg-emerald-100 text-emerald-700 border-transparent hover:bg-emerald-200">AUTO</Badge>
+                      )}
+                      {!exp.isCrossSubsidy && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-1">
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>{new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(exp.expenseDate || exp.createdAt))}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0 flex flex-col items-end justify-center h-10">
+                    <span className="font-extrabold text-slate-900 text-lg sm:text-xl tracking-tight">
+                      {formatCurrency(exp.amount, { currency })}
+                    </span>
+                    {exp.originalCurrency && exp.originalCurrency !== currency && (
+                      <span className="block text-[10px] sm:text-xs text-slate-400 font-semibold">{exp.originalCurrency}</span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-sm text-slate-500 flex justify-between items-end">
-                  <span>
-                    {tExpense("payer")} <span className="font-medium text-slate-700">{payer}</span>
-                  </span>
-                  <span className="text-[11px] uppercase font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                    {tExpense("splitWith", { count: exp.splits.length })}
-                  </span>
+                
+                <div className="bg-slate-50 rounded-xl p-2.5 mt-1 border border-slate-100 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                      <span className="text-slate-400">{tExpense("payer")}</span> 
+                      <span className="font-semibold text-slate-700 truncate">{payer}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>{tExpense("splitWith", { count: exp.splits.length })}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {exp.splits.map((s: any) => {
+                      const pName = participants.find(p => p.id === s.participantId)?.name || "Unknown";
+                      return (
+                        <span key={s.participantId} className="px-2 py-0.5 border border-slate-200 bg-white rounded-md text-[11px] font-medium text-slate-600 shadow-sm">
+                          {pName}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               </li>
             );
@@ -83,7 +141,9 @@ export default function ExpenseTab({ eventId, participants, expenses, currency }
         </ul>
       )}
 
-      {/* 1 Form duy nhất dùng chung cho Add và Edit */}
+      </div>
+
+      {/* Expense Form */}
       {formOpen && (
         <ExpenseForm
           eventId={eventId}
@@ -92,17 +152,19 @@ export default function ExpenseTab({ eventId, participants, expenses, currency }
           open={formOpen}
           onOpenChange={setFormOpen}
           currency={currency}
+          groups={groups}
+          expensesCount={expenses.length}
         />
       )}
 
-      {/* Nút Add */}
-      <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none px-4 z-10">
+      {/* FIX 1: Đổi thành `absolute`, căn giữa tuyệt đối trên mọi màn hình */}
+      <div className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex justify-center pointer-events-none z-40">
         <button
           onClick={handleOpenAdd}
-          className="pointer-events-auto bg-blue-600 text-white font-medium h-14 px-8 rounded-full shadow-[0_8px_20px_rgba(37,99,235,0.25)] hover:bg-blue-700 hover:shadow-[0_12px_24px_rgba(37,99,235,0.35)] transition-all active:scale-95 flex items-center gap-2"
+          className="pointer-events-auto bg-blue-600 text-white font-semibold h-14 sm:h-16 px-8 sm:px-10 rounded-full shadow-[0_8px_30px_rgba(37,99,235,0.3)] hover:bg-blue-700 hover:shadow-[0_12px_40px_rgba(37,99,235,0.4)] transition-all duration-300 active:scale-95 flex items-center gap-2 group"
         >
-          <Plus className="w-6 h-6" />
-          <span className="text-lg">{t("expenses")}</span>
+          <Plus className="w-6 h-6 sm:w-7 sm:h-7 group-hover:rotate-90 transition-transform duration-300" />
+          <span className="text-lg sm:text-xl tracking-tight">{t("addExpense")}</span>
         </button>
       </div>
     </div>

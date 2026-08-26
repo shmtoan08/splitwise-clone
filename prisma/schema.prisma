@@ -16,20 +16,32 @@ datasource db {
 // Event — Sự kiện / chuyến đi / nhóm chia tiền
 // ---------------------------------------------------------------------------
 model Event {
-  id        String   @id @default(uuid())
-  title     String
-  currency  String   @default("VND") // Tiền tệ mặc định (ISO 4217)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  title              String
+  /// Tiền tệ gốc của sự kiện (ISO 4217). Đổi tỪn từ `currency` — dùng RENAME COLUMN trong migration, không DROP+ADD
+  baseCurrency       String   @default("VND")
+  /// DeviceToken của người tạo event — soft identity, dùng để kiểm tra quyền đổi baseCurrency
+  creatorDeviceToken String?
+  /// Chế độ nâng cao (có quản lý ngân sách / quyết toán bù trừ)
+  isAdvancedMode     Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   participants Participant[]
   expenses     Expense[]
   settlements  Settlement[]
+  groups       Group[]
 }
 
 // ---------------------------------------------------------------------------
 // Participant — Thành viên tham gia sự kiện
 // ---------------------------------------------------------------------------
+enum BudgetMode {
+  FIXED
+  UNLIMITED
+  SELF_FUNDED
+}
+
 model Participant {
   id          String   @id @default(cuid())
   eventId     String
@@ -39,7 +51,18 @@ model Participant {
   /// Unique để 1 token chỉ map 1 participant.
   /// Dùng để xác thực "soft identity" mà không cần đăng nhập.
   deviceToken String?
+  /// Chế độ ngân sách của thành viên
+  budgetMode  BudgetMode @default(FIXED)
+  /// Ngân sách cố định (chỉ có ý nghĩa khi budgetMode = FIXED)
+  budget      Int        @default(0)
+  
+  /// Hệ số (weight) để tính toán tự động khi chia theo phần
+  weight       Float @default(1.0)
+  /// Cấu hình gia đình dạng { adults: number, children: number[] }
+  familyConfig Json?
+  
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
   event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   paymentInfo PaymentInfo? // 1-1, optional
@@ -50,6 +73,7 @@ model Participant {
   owedSplits          ExpenseSplit[]
   settlementsSent     Settlement[]   @relation("SettlementFrom")
   settlementsReceived Settlement[]   @relation("SettlementTo")
+  groupMembers        GroupMember[]
 
   @@unique([eventId, deviceToken])
   @@index([eventId])
@@ -79,19 +103,34 @@ model PaymentInfo {
 // ---------------------------------------------------------------------------
 // Expense — Khoản chi tiêu
 // ---------------------------------------------------------------------------
+enum SplitMode {
+  AMOUNT
+  SHARES
+}
+
 model Expense {
-  id          String   @id @default(cuid())
-  eventId     String
-  title       String
-  /// Số tiền, đơn vị: đồng (VND) / yên (JPY) — KHÔNG dùng Float để tránh sai số
-  amount      Int
-  payerId     String
+  id               String   @id @default(cuid())
+  eventId          String
+  title            String
+  /// Số tiền đã quy đổi sang baseCurrency của event — KHÔNG dùng Float để tránh sai số
+  amount           Int
+  payerId          String
   /// Participant đã tạo khoản chi — để hiển thị "ai đã thêm", không dùng để chặn cứng
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdById      String?
+  /// Tiền tệ gốc của khoản chi (nếu khác baseCurrency của event)
+  originalCurrency String?
+  /// Tỷ giá snapshot tại thời điểm tạo/sửa — dùng Decimal để tránh sai số dấu phẩy động
+  exchangeRate     Decimal?  @db.Decimal(18, 6)
+  /// Đánh dấu Expense do thuật toán bù đắp chéo tự sinh — dùng để xác định và xóa/tạo lại khi re-apply
+  isCrossSubsidy   Boolean  @default(false)
+  /// Ngày phát sinh khoản chi
+  expenseDate      DateTime @default(now())
+  /// Chế độ chia tiền
+  splitMode        SplitMode @default(AMOUNT)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
   /// Optimistic locking — tăng mỗi lần update để tránh 2 người ghi đè nhau
-  version     Int      @default(0)
+  version          Int      @default(0)
 
   event     Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
   payer     Participant    @relation("PaidBy", fields: [payerId], references: [id])
@@ -216,4 +255,25 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Group & GroupMember — Tag nhóm Flex-Split
+// ---------------------------------------------------------------------------
+model Group {
+  id        String        @id @default(cuid())
+  eventId   String
+  name      String
+  createdAt DateTime      @default(now())
+  event     Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  members   GroupMember[]
+}
+
+model GroupMember {
+  groupId       String
+  participantId String
+  group         Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, participantId])
 }

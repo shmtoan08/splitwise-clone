@@ -1,12 +1,5 @@
 "use server";
 
-// TODO: Implement expense Server Actions
-// - addExpense(data): Tạo Expense + ExpenseSplit trong 1 transaction
-//   Phải dùng splitEvenly/splitByShares từ utils/algorithm.ts
-//   Phải validate tổng splits === expense.amount trước khi lưu
-// - updateExpense(data): Update với optimistic locking (check version)
-// - deleteExpense(expenseId): Xoá expense (cascade delete splits tự động)
-
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "../../generated/prisma";
 import { addExpenseSchema, updateExpenseSchema } from "@/schemas/expense.schema";
@@ -18,55 +11,100 @@ import {
 } from "@/utils/algorithm";
 import type { ActionResult } from "@/types";
 import { revalidatePath } from "next/cache";
-
 import { cookies } from "next/headers";
+import { getExchangeRate, ExchangeRateError } from "@/lib/exchangeRate";
 
 const DEVICE_TOKEN_COOKIE = "split-app-device-token";
+
+/** Lấy tỷ giá: ưu tiên manualExchangeRate → fallback gọi API */
+async function resolveExchangeRate(
+  originalCurrency: string | undefined,
+  baseCurrency: string,
+  manualRate: number | undefined
+): Promise<{ rate: number; needsManualRate: false } | { rate: null; needsManualRate: true; message: string }> {
+  if (!originalCurrency || originalCurrency === baseCurrency) {
+    return { rate: 1, needsManualRate: false };
+  }
+
+  // Ưu tiên rate nhập tay (dự phòng khi API down)
+  if (manualRate !== undefined && manualRate > 0) {
+    return { rate: manualRate, needsManualRate: false };
+  }
+
+  try {
+    const rate = await getExchangeRate(originalCurrency, baseCurrency);
+    return { rate, needsManualRate: false };
+  } catch (err) {
+    const message = err instanceof ExchangeRateError
+      ? err.message
+      : "Không lấy được tỷ giá. Vui lòng nhập thủ công.";
+    return { rate: null, needsManualRate: true, message };
+  }
+}
 
 export async function addExpense(data: unknown): Promise<ActionResult> {
   const parsed = addExpenseSchema.safeParse(data);
   if (!parsed.success) {
-    // Collect all error messages from Zod
     const errors = parsed.error.issues.map((e: any) => e.message).join(", ");
     return { success: false, error: `Dữ liệu không hợp lệ: ${errors}` };
   }
 
-  const { eventId, title, amount, payerId, splitConfig } = parsed.data;
+  const { eventId, title, amount, payerId, splitConfig, originalCurrency, manualExchangeRate, expenseDate } = parsed.data;
 
   try {
-    // 1. Calculate splits using algorithm based on mode
+    // 1. Lấy baseCurrency của event
+    const eventRecord = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { baseCurrency: true },
+    });
+    if (!eventRecord) {
+      return { success: false, error: "Sự kiện không tồn tại." };
+    }
+    const baseCurrency = eventRecord.baseCurrency;
+
+    // 2. Resolve tỷ giá nếu có originalCurrency
+    let snapshotRate: number | null = null;
+    let finalAmount = amount; // amount đã là số đồng baseCurrency
+
+    if (originalCurrency && originalCurrency !== baseCurrency) {
+      const resolved = await resolveExchangeRate(originalCurrency, baseCurrency, manualExchangeRate);
+      if (resolved.needsManualRate) {
+        return { success: false, error: `EXCHANGE_RATE_UNAVAILABLE:${resolved.message}` };
+      }
+      snapshotRate = resolved.rate;
+      // amount trong payload là số nguyên tính theo originalCurrency → quy đổi sang baseCurrency
+      finalAmount = Math.round(amount * snapshotRate);
+    }
+
+    // 3. Tính splits dựa trên finalAmount
     let calculatedSplits: Array<{ participantId: string; amount: number }> = [];
     let participantIds: string[] = [];
 
     if (splitConfig.mode === "EVEN") {
-      calculatedSplits = splitEvenly(amount, splitConfig.participantIds);
+      calculatedSplits = splitEvenly(finalAmount, splitConfig.participantIds);
       participantIds = splitConfig.participantIds;
     } else if (splitConfig.mode === "SHARES") {
-      calculatedSplits = splitByShares(amount, splitConfig.splits);
+      calculatedSplits = splitByShares(finalAmount, splitConfig.splits);
       participantIds = splitConfig.splits.map((s) => s.participantId);
     } else if (splitConfig.mode === "CUSTOM") {
-      calculatedSplits = splitByCustomAmount(amount, splitConfig.splits);
+      calculatedSplits = splitByCustomAmount(finalAmount, splitConfig.splits);
       participantIds = splitConfig.splits.map((s) => s.participantId);
     }
 
-    // 2. Validate total splits match total amount precisely
-    validateSplitSum(amount, calculatedSplits);
+    validateSplitSum(finalAmount, calculatedSplits);
 
-    // 3. Validate participantIds belong to event
+    // 4. Validate participants thuộc event
     const uniqueParticipantIds = Array.from(new Set([payerId, ...participantIds]));
     const dbParticipants = await prisma.participant.findMany({
-      where: {
-        eventId,
-        id: { in: uniqueParticipantIds }
-      },
-      select: { id: true }
+      where: { eventId, id: { in: uniqueParticipantIds } },
+      select: { id: true },
     });
 
     if (dbParticipants.length !== uniqueParticipantIds.length) {
       return { success: false, error: "Một số thành viên không thuộc nhóm này." };
     }
 
-    // 4. Lấy createdById từ cookie - bắt buộc phải có danh tính
+    // 5. Lấy createdById từ cookie
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
 
@@ -82,39 +120,41 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
     if (!currentParticipant) {
       return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
     }
-    
+
     const createdById = currentParticipant.id;
 
-    // 5. Create using Prisma Transaction
+    // 6. Tạo Expense + Splits trong transaction
     await prisma.$transaction(async (tx) => {
       const expense = await tx.expense.create({
         data: {
           eventId,
           title,
-          amount,
+          amount: finalAmount,
           payerId,
           createdById,
-          version: 1, // Start with version 1
+          version: 1,
+          originalCurrency: originalCurrency ?? null,
+          // Dùng Prisma.Decimal để tránh Float precision
+          exchangeRate: snapshotRate !== null ? new Prisma.Decimal(snapshotRate) : null,
+          isCrossSubsidy: false,
+          expenseDate: expenseDate ?? new Date(),
+          splitMode: splitConfig.mode as any,
         },
       });
 
-      const expenseSplitsData = calculatedSplits.map((split) => ({
-        expenseId: expense.id,
-        participantId: split.participantId,
-        amount: split.amount,
-      }));
-
       await tx.expenseSplit.createMany({
-        data: expenseSplitsData,
+        data: calculatedSplits.map((split) => ({
+          expenseId: expense.id,
+          participantId: split.participantId,
+          amount: split.amount,
+        })),
       });
     });
 
-    // 4. Revalidate cache
     revalidatePath(`/e/${eventId}`);
     return { success: true, data: undefined };
   } catch (error: any) {
     console.error("[addExpense] error:", error);
-    // Trả về error thay vì throw ra client
     return { success: false, error: "Lỗi hệ thống khi thêm chi phí. Vui lòng thử lại sau." };
   }
 }
@@ -126,84 +166,105 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
     return { success: false, error: `Dữ liệu không hợp lệ: ${errors}` };
   }
 
-  const { id, eventId, title, amount, payerId, splitConfig, currentVersion } = parsed.data;
+  const { id, eventId, title, amount, payerId, splitConfig, currentVersion, originalCurrency, manualExchangeRate, expenseDate } = parsed.data;
 
   try {
-    // 1. Calculate splits using algorithm based on mode
+    // 1. Lấy bản ghi expense cũ (để kiểm tra originalCurrency đã lưu)
+    const [eventRecord, existingExpense] = await Promise.all([
+      prisma.event.findUnique({ where: { id: eventId }, select: { baseCurrency: true } }),
+      prisma.expense.findUnique({ where: { id }, select: { originalCurrency: true, exchangeRate: true } }),
+    ]);
+
+    if (!eventRecord) return { success: false, error: "Sự kiện không tồn tại." };
+    if (!existingExpense) return { success: false, error: "Khoản chi không tồn tại." };
+
+    const baseCurrency = eventRecord.baseCurrency;
+
+    // 2. Resolve tỷ giá
+    // Nếu originalCurrency không đổi → GIỮ NGUYÊN exchangeRate đã snapshot, không gọi lại API
+    let snapshotRate: Prisma.Decimal | null = existingExpense.exchangeRate;
+    let finalAmount = amount;
+
+    const currencyChanged = originalCurrency !== (existingExpense.originalCurrency ?? undefined);
+
+    if (originalCurrency && originalCurrency !== baseCurrency) {
+      if (currencyChanged) {
+        // originalCurrency bị đổi → cần lấy tỷ giá mới
+        const resolved = await resolveExchangeRate(originalCurrency, baseCurrency, manualExchangeRate);
+        if (resolved.needsManualRate) {
+          return { success: false, error: `EXCHANGE_RATE_UNAVAILABLE:${resolved.message}` };
+        }
+        snapshotRate = new Prisma.Decimal(resolved.rate);
+        finalAmount = Math.round(amount * resolved.rate);
+      } else {
+        // Giữ nguyên exchangeRate — chỉ tính lại amount theo rate cũ
+        const rate = existingExpense.exchangeRate?.toNumber() ?? 1;
+        finalAmount = Math.round(amount * rate);
+      }
+    } else {
+      // Không có originalCurrency hoặc giống baseCurrency
+      snapshotRate = null;
+    }
+
+    // 3. Tính splits
     let calculatedSplits: Array<{ participantId: string; amount: number }> = [];
 
     if (splitConfig.mode === "EVEN") {
-      calculatedSplits = splitEvenly(amount, splitConfig.participantIds);
+      calculatedSplits = splitEvenly(finalAmount, splitConfig.participantIds);
     } else if (splitConfig.mode === "SHARES") {
-      calculatedSplits = splitByShares(amount, splitConfig.splits);
+      calculatedSplits = splitByShares(finalAmount, splitConfig.splits);
     } else if (splitConfig.mode === "CUSTOM") {
-      calculatedSplits = splitByCustomAmount(amount, splitConfig.splits);
+      calculatedSplits = splitByCustomAmount(finalAmount, splitConfig.splits);
     }
 
-    // 2. Validate total splits match total amount precisely
-    validateSplitSum(amount, calculatedSplits);
+    validateSplitSum(finalAmount, calculatedSplits);
 
-    // 3. Validate participantIds belong to event
+    // 4. Validate participants
     const uniqueParticipantIds = Array.from(new Set([payerId, ...calculatedSplits.map(s => s.participantId)]));
     const dbParticipants = await prisma.participant.findMany({
-      where: {
-        eventId,
-        id: { in: uniqueParticipantIds }
-      },
-      select: { id: true }
+      where: { eventId, id: { in: uniqueParticipantIds } },
+      select: { id: true },
     });
 
     if (dbParticipants.length !== uniqueParticipantIds.length) {
       return { success: false, error: "Một số thành viên không thuộc nhóm này." };
     }
 
-    // 4. Xác nhận danh tính người sửa
+    // 5. Xác nhận danh tính
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
-    
-    if (!deviceToken) {
-      return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
-    }
-    
+    if (!deviceToken) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
+
     const currentParticipant = await prisma.participant.findFirst({
       where: { eventId, deviceToken },
       select: { id: true },
     });
-    
-    if (!currentParticipant) {
-      return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
-    }
+    if (!currentParticipant) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
 
-    // 5. Update using Prisma Transaction (Optimistic Locking)
+    // 6. Update trong transaction (Optimistic Locking)
     await prisma.$transaction(async (tx) => {
-      // a. Xoá tất cả splits cũ
-      await tx.expenseSplit.deleteMany({
-        where: { expenseId: id },
-      });
+      await tx.expenseSplit.deleteMany({ where: { expenseId: id } });
 
-      // b. Cập nhật Expense (kèm version check)
       const updatedExpense = await tx.expense.update({
-        where: {
-          id,
-          version: currentVersion, // Check optimistic locking
-        },
+        where: { id, version: currentVersion },
         data: {
           title,
-          amount,
+          amount: finalAmount,
           payerId,
           version: { increment: 1 },
+          originalCurrency: originalCurrency ?? null,
+          exchangeRate: snapshotRate,
+          expenseDate: expenseDate ?? new Date(),
+          splitMode: splitConfig.mode as any,
         },
       });
 
-      // c. Tạo splits mới
-      const expenseSplitsData = calculatedSplits.map(split => ({
-        expenseId: updatedExpense.id,
-        participantId: split.participantId,
-        amount: split.amount,
-      }));
-
       await tx.expenseSplit.createMany({
-        data: expenseSplitsData,
+        data: calculatedSplits.map(split => ({
+          expenseId: updatedExpense.id,
+          participantId: split.participantId,
+          amount: split.amount,
+        })),
       });
     });
 
@@ -212,7 +273,6 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
   } catch (error: any) {
     console.error("[updateExpense] error:", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-      // Record not found có thể do xoá hoặc do sai version
       return { success: false, error: "VERSION_CONFLICT" };
     }
     return { success: false, error: "Lỗi hệ thống khi cập nhật chi phí. Vui lòng thử lại sau." };
@@ -225,28 +285,18 @@ export async function deleteExpense(expenseId: string, eventId: string): Promise
   }
 
   try {
-    // 1. Xác nhận danh tính người xoá
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
-    
-    if (!deviceToken) {
-      return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
-    }
-    
+    if (!deviceToken) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
+
     const currentParticipant = await prisma.participant.findFirst({
       where: { eventId, deviceToken },
       select: { id: true },
     });
-    
-    if (!currentParticipant) {
-      return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
-    }
+    if (!currentParticipant) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
 
-    // 2. Xoá Expense
-    await prisma.expense.delete({
-      where: { id: expenseId },
-    });
-    
+    await prisma.expense.delete({ where: { id: expenseId } });
+
     revalidatePath(`/e/${eventId}`);
     return { success: true, data: undefined };
   } catch (error: any) {

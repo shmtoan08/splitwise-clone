@@ -33,7 +33,7 @@ async function runTests() {
   const event = await prisma.event.create({
     data: {
       title: "Test Buffer",
-      currency: "VND",
+      baseCurrency: "VND",
     }
   });
 

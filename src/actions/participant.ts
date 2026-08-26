@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { addParticipantSchema, claimIdentitySchema, PaymentInfoSchema } from "@/schemas/participant.schema";
+import { addParticipantSchema, claimIdentitySchema, PaymentInfoSchema, updateFamilyConfigSchema } from "@/schemas/participant.schema";
 import type { ActionResult } from "@/types";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -29,32 +29,43 @@ export async function addParticipant(
   }
 
   try {
-    let deviceToken = null;
+    let deviceToken: string | null = null;
     if (isSelf) {
-      deviceToken = randomUUID();
-    }
-
-    const participant = await prisma.participant.create({
-      data: {
-        eventId,
-        name,
-        deviceToken,
-      },
-      select: { id: true },
-    });
-
-    if (isSelf && deviceToken) {
+      // Ưu tiên giữ lại cookie hiện tại (creator token) để không ghi đè isCreator
       const cookieStore = await cookies();
-      cookieStore.set(DEVICE_TOKEN_COOKIE, deviceToken, {
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365, // 1 year
-        httpOnly: false, // client hook needs to read it
-        sameSite: "lax",
-      });
-    }
+      const existingToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+      deviceToken = existingToken ?? randomUUID();
 
-    revalidatePath(`/e/${eventId}`);
-    return { success: true, data: { participantId: participant.id } };
+      const participant = await prisma.participant.create({
+        data: {
+          eventId,
+          name,
+          deviceToken,
+        },
+        select: { id: true },
+      });
+
+      // Chỉ set cookie nếu chưa có (không ghi đè creator token)
+      if (!existingToken) {
+        cookieStore.set(DEVICE_TOKEN_COOKIE, deviceToken, {
+          path: "/",
+          maxAge: 60 * 60 * 24 * 365, // 1 year
+          httpOnly: false, // client hook needs to read it
+          sameSite: "lax",
+        });
+      }
+
+      revalidatePath(`/e/${eventId}`);
+      return { success: true, data: { participantId: participant.id } };
+    } else {
+      // Thêm thành viên bình thường (không phải bản thân)
+      const participant = await prisma.participant.create({
+        data: { eventId, name, deviceToken: null },
+        select: { id: true },
+      });
+      revalidatePath(`/e/${eventId}`);
+      return { success: true, data: { participantId: participant.id } };
+    }
   } catch (error) {
     console.error("[addParticipant] error:", error);
     return { success: false, error: "Không thể thêm thành viên. Vui lòng thử lại." };
@@ -175,6 +186,36 @@ export async function updatePaymentInfo(
     return { success: true, data: undefined };
   } catch (error) {
     console.error("[updatePaymentInfo] error:", error);
-    return { success: false, error: "Không thể cập nhật thông tin thanh toán. Vui lòng thử lại." };
+    return { success: false, error: "Lỗi hệ thống khi lưu thông tin thanh toán." };
+  }
+}
+
+export async function updateParticipantFamilyConfig(
+  participantId: string,
+  eventId: string,
+  familyConfig: { adults: number; children: number[] }
+): Promise<ActionResult> {
+  const parsed = updateFamilyConfigSchema.safeParse({ participantId, eventId, familyConfig });
+  if (!parsed.success) {
+    return { success: false, error: "Cấu hình gia đình không hợp lệ" };
+  }
+
+  const { adults, children } = parsed.data.familyConfig;
+  const weight = adults + children.reduce((sum, child) => sum + child, 0);
+
+  try {
+    await prisma.participant.update({
+      where: { id: participantId, eventId },
+      data: {
+        familyConfig: parsed.data.familyConfig,
+        weight,
+      },
+    });
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("[updateParticipantFamilyConfig] error:", error);
+    return { success: false, error: "Không thể lưu cấu hình gia đình. Vui lòng thử lại." };
   }
 }

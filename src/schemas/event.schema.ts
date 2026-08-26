@@ -19,3 +19,14 @@ export const updateEventSchema = createEventSchema.extend({
 });
 
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
+
+/** Schema cho action đổi baseCurrency của Event */
+export const updateEventCurrencySchema = z.object({
+  eventId: z.string().uuid("eventId phải là UUID"),
+  baseCurrency: z
+    .string()
+    .length(3, "Mã tiền tệ phải gồm đúng 3 ký tự ISO 4217")
+    .toUpperCase(),
+});
+
+export type UpdateEventCurrencyInput = z.infer<typeof updateEventCurrencySchema>;

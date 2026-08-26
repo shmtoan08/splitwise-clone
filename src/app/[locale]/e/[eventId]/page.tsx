@@ -1,7 +1,6 @@
 import { getEventById } from "@/actions/event";
 import { notFound } from "next/navigation";
-import ParticipantList from "@/components/event/ParticipantList";
-import RecentEventTracker from "@/components/event/RecentEventTracker";
+import EventTabsClient from "@/components/event/EventTabsClient";
 
 type Props = {
   params: Promise<{ eventId: string; locale: string }>;
@@ -16,10 +15,5 @@ export default async function EventPage({ params }: Props) {
     notFound();
   }
 
-  return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <RecentEventTracker eventId={event.id} title={event.title} />
-      <ParticipantList eventId={event.id} participants={event.participants} />
-    </div>
-  );
+  return <EventTabsClient event={event} />;
 }

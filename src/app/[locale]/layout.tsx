@@ -1,21 +1,27 @@
 import { NextIntlClientProvider } from "next-intl";
-import { getMessages } from "next-intl/server";
+import { getMessages, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { AlertProvider } from "@/providers/AlertProvider";
 import "../globals.css";
 
 const inter = Inter({ subsets: ["latin", "vietnamese"] });
 
-export const metadata: Metadata = {
-  title: {
-    template: "%s | Chia Tiền Nhóm",
-    default: "Chia Tiền Nhóm — Splitwise Clone",
-  },
-  description:
-    "Ứng dụng chia tiền nhóm miễn phí. Không cần đăng nhập. Hỗ trợ tiếng Việt và tiếng Nhật.",
-};
+export async function generateMetadata({ params }: Omit<Props, 'children'>): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'app' });
+  
+  return {
+    title: {
+      template: `%s | ${t('name')}`,
+      default: t('layoutTitle'),
+    },
+    description: t('description'),
+  };
+}
+
 
 type Props = {
   children: React.ReactNode;
@@ -37,7 +43,9 @@ export default async function LocaleLayout({ children, params }: Props) {
     <html lang={locale}>
       <body className={inter.className}>
         <NextIntlClientProvider messages={messages}>
-          {children}
+          <AlertProvider>
+            {children}
+          </AlertProvider>
         </NextIntlClientProvider>
       </body>
     </html>

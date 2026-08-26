@@ -47,3 +47,14 @@ export const updatePaymentInfoSchema = z.object({
 });
 
 export type UpdatePaymentInfoInput = z.infer<typeof updatePaymentInfoSchema>;
+
+export const updateFamilyConfigSchema = z.object({
+  participantId: z.string().cuid(),
+  eventId: z.string().uuid(),
+  familyConfig: z.object({
+    adults: z.number().int().min(1, "Phải có ít nhất 1 người lớn"),
+    children: z.array(z.number().gt(0).lte(1, "Hệ số trẻ em không được quá 1")),
+  }),
+});
+
+export type UpdateFamilyConfigInput = z.infer<typeof updateFamilyConfigSchema>;
