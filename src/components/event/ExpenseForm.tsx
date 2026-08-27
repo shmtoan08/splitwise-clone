@@ -463,7 +463,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
         </div>
       </div>
 
-      <div className="pt-2 pb-0 flex flex-col flex-1 min-h-0">
+      <div className="pt-2 pb-0">
         <SplitRows 
           participants={participants}
           initialSplits={initialExpense?.splits}

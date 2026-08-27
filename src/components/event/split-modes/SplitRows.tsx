@@ -54,7 +54,6 @@ export default function SplitRows({
   const displayCurrency = originalCurrency ?? currency;
 
   // ─── Init State ─────────────────────────────────────────────────────────────
-  
   const [activeMode, setActiveMode] = useState<"AMOUNT" | "SHARES">(initialMode);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
@@ -86,12 +85,9 @@ export default function SplitRows({
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   // ─── Recalculate helpers ──────────────────────────────────────────────────
-
   const recalculateAmounts = useCallback((currentMode: "AMOUNT" | "SHARES", currentSelectedIds: Set<string>, currentSharesMap: Record<string, number>) => {
     const idsArray = Array.from(currentSelectedIds);
-    if (idsArray.length === 0 || totalAmount <= 0) {
-      return {};
-    }
+    if (idsArray.length === 0 || totalAmount <= 0) return {};
 
     if (currentMode === "SHARES") {
       const inputs = idsArray.map(id => ({ participantId: id, shares: currentSharesMap[id] ?? 0 })).filter(i => i.shares > 0);
@@ -108,17 +104,12 @@ export default function SplitRows({
     }
   }, [totalAmount]);
 
-  // Recalculate implicitly when totalAmount changes
   const hasInitialized = useRef(false);
   const prevTotalAmount = useRef(totalAmount);
-  
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     if (!hasInitialized.current) {
       hasInitialized.current = true;
-      // First render: if no initial splits, calculate them based on initialMode
       if (!initialSplits || initialSplits.length === 0) {
         const newAmountMap = recalculateAmounts(activeMode, selectedIds, sharesMap);
         setAmountMap(prev => ({ ...prev, ...newAmountMap }));
@@ -126,13 +117,11 @@ export default function SplitRows({
       return;
     }
 
-    // Only recalculate if totalAmount ACTUALLY changed
     if (prevTotalAmount.current !== totalAmount) {
       prevTotalAmount.current = totalAmount;
       const newAmountMap = recalculateAmounts(activeMode, selectedIds, sharesMap);
       setAmountMap(prev => {
         const next = { ...prev };
-        // Keep unchecked values as they were, only update checked
         for (const id of Array.from(selectedIds)) {
           next[id] = newAmountMap[id] ?? 0;
         }
@@ -143,7 +132,6 @@ export default function SplitRows({
   }, [totalAmount]);
 
   // ─── Output Sync ──────────────────────────────────────────────────────────
-
   const onChangeRef = useRef(onChange);
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -170,7 +158,6 @@ export default function SplitRows({
 
     onChangeRef.current(activeMode, splits);
 
-    // Validate
     let valid = idsArray.length > 0;
     if (activeMode === "SHARES") {
       const totalShares = idsArray.reduce((acc, id) => acc + (sharesMap[id] ?? 0), 0);
@@ -181,33 +168,9 @@ export default function SplitRows({
     onValidityChangeRef.current(valid);
   }, [selectedIds, amountMap, sharesMap, activeMode, totalAmount]);
 
-  useEffect(() => {
-    if (expandedId) {
-      const el = inputRefs.current[expandedId];
-      el?.focus();
-      el?.select();
-    }
-  }, [expandedId]);
-
   // ─── Handlers ──────────────────────────────────────────────────────────────
-  // State kiểm tra đã chọn đủ tất cả thành viên chưa
   const isAllSelected = selectedIds.size === participants.length && participants.length > 0;
 
-  // Hàm toggle chọn/bỏ chọn tất cả
-  const handleToggleSelectAll = () => {
-    setExpandedId(null);
-    executeAction(() => {
-      if (isAllSelected) {
-        setSelectedIds(new Set());
-        setAmountMap({});
-      } else {
-        const next = new Set(participants.map((p) => p.id));
-        setSelectedIds(next);
-        const newAmountMap = recalculateAmounts(activeMode, next, sharesMap);
-        setAmountMap(newAmountMap);
-      }
-    });
-  };
   const executeAction = useCallback((action: () => void) => {
     if (isCustomized && totalAmount > 0) {
       setPendingAction(() => action);
@@ -229,6 +192,20 @@ export default function SplitRows({
     setPendingAction(null);
   }, []);
 
+  const handleToggleSelectAll = () => {
+    executeAction(() => {
+      if (isAllSelected) {
+        setSelectedIds(new Set());
+        setAmountMap({});
+      } else {
+        const next = new Set(participants.map((p) => p.id));
+        setSelectedIds(next);
+        const newAmountMap = recalculateAmounts(activeMode, next, sharesMap);
+        setAmountMap(newAmountMap);
+      }
+    });
+  };
+
   const handleToggle = useCallback((participantId: string, checked: boolean) => {
     executeAction(() => {
       setSelectedIds(prev => {
@@ -239,21 +216,18 @@ export default function SplitRows({
           next.delete(participantId);
         }
         
-        // Recalculate remaining
         const newAmountMap = recalculateAmounts(activeMode, next, sharesMap);
         setAmountMap(am => {
           const nextAm = { ...am };
           for (const id of Array.from(next)) nextAm[id] = newAmountMap[id] ?? 0;
           return nextAm;
         });
-        
         return next;
       });
     });
   }, [executeAction, activeMode, sharesMap, recalculateAmounts]);
 
   const handleGroupClick = useCallback((group: Group) => {
-    setExpandedId(null);
     executeAction(() => {
       const groupMemberIds = group.members.map(m => m.participantId);
       const validIds = new Set(groupMemberIds.filter(id => participants.some(p => p.id === id)));
@@ -270,7 +244,6 @@ export default function SplitRows({
   }, [executeAction, participants, activeMode, sharesMap, recalculateAmounts]);
 
   const handleRestoreShares = useCallback(() => {
-    setExpandedId(null);
     const action = () => {
       setActiveMode("SHARES");
       setSharesMap(prev => {
@@ -291,10 +264,7 @@ export default function SplitRows({
     };
 
     if (isCustomized) {
-      setPendingAction(() => () => {
-        action();
-        setIsCustomized(false);
-      });
+      setPendingAction(() => () => { action(); setIsCustomized(false); });
     } else {
       action();
       setIsCustomized(false);
@@ -302,7 +272,6 @@ export default function SplitRows({
   }, [isCustomized, selectedIds, participants, recalculateAmounts]);
 
   const handleEqualSplit = useCallback(() => {
-    setExpandedId(null);
     const action = () => {
       setActiveMode("AMOUNT");
       const newAmountMap = recalculateAmounts("AMOUNT", selectedIds, sharesMap);
@@ -314,10 +283,7 @@ export default function SplitRows({
     };
 
     if (isCustomized) {
-      setPendingAction(() => () => {
-        action();
-        setIsCustomized(false);
-      });
+      setPendingAction(() => () => { action(); setIsCustomized(false); });
     } else {
       action();
       setIsCustomized(false);
@@ -328,7 +294,7 @@ export default function SplitRows({
     const num = parseInt(val.replace(/[^0-9]/g, ""), 10) || 0;
     
     setAmountMap(prev => {
-      if (prev[participantId] === num) return prev; // Value didn't actually change
+      if (prev[participantId] === num) return prev; 
       
       if (activeMode !== "AMOUNT") setActiveMode("AMOUNT");
       setIsCustomized(true);
@@ -342,14 +308,13 @@ export default function SplitRows({
     const num = cleaned === "" ? 0 : parseFloat(cleaned);
     
     setSharesMap(prev => {
-      if (prev[participantId] === num) return prev; // Value didn't actually change
+      if (prev[participantId] === num) return prev; 
       
       const nextSharesMap = { ...prev, [participantId]: num };
       
       if (activeMode !== "SHARES") setActiveMode("SHARES");
       setIsCustomized(true);
       
-      // Since it's SHARES mode, changing one share automatically recalculates amounts
       const newAmountMap = recalculateAmounts("SHARES", selectedIds, nextSharesMap);
       setAmountMap(am => {
         const nextAm = { ...am };
@@ -362,25 +327,23 @@ export default function SplitRows({
   }, [activeMode, selectedIds, recalculateAmounts]);
 
   const handleRowClick = useCallback((p: Participant) => {
-  if (!selectedIds.has(p.id)) {
-    // Bấm vào dòng chưa check → tự check để có thể nhập luôn
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.add(p.id);
-      const newAmountMap = recalculateAmounts(activeMode, next, sharesMap);
-      setAmountMap(am => {
-        const nextAm = { ...am };
-        for (const id of Array.from(next)) nextAm[id] = newAmountMap[id] ?? 0;
-        return nextAm;
+    if (!selectedIds.has(p.id)) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.add(p.id);
+        const newAmountMap = recalculateAmounts(activeMode, next, sharesMap);
+        setAmountMap(am => {
+          const nextAm = { ...am };
+          for (const id of Array.from(next)) nextAm[id] = newAmountMap[id] ?? 0;
+          return nextAm;
+        });
+        return next;
       });
-      return next;
-    });
-    setIsCustomized(true);
-  }
-  setExpandedId(prev => (prev === p.id ? null : p.id));
-}, [selectedIds, activeMode, sharesMap, recalculateAmounts]);
+      setIsCustomized(true);
+    }
+  }, [selectedIds, activeMode, sharesMap, recalculateAmounts]);
+
   // ─── Render calculations ────────────────────────────────────────────────────
-  
   let currentTotalAmount = 0;
   for (const id of Array.from(selectedIds)) currentTotalAmount += (amountMap[id] ?? 0);
   const left = totalAmount - currentTotalAmount;
@@ -390,9 +353,8 @@ export default function SplitRows({
   for (const id of Array.from(selectedIds)) currentTotalShares += (sharesMap[id] ?? 0);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
-
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-3">
+    <div className="flex flex-col gap-3">
       {/* Confirm Dialog */}
       {pendingAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-150">
@@ -451,9 +413,7 @@ export default function SplitRows({
         </div>
         
         <div className="flex items-center justify-between gap-2 mt-1">
-          {/* Cụm 3 Nút Thao Tác Bên Trái */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Nút Chọn / Bỏ chọn tất cả */}
             <button
               type="button"
               onClick={handleToggleSelectAll}
@@ -477,7 +437,6 @@ export default function SplitRows({
               </span>
             </button>
 
-            {/* Nút Khôi phục tỉ lệ */}
             <button
               type="button"
               onClick={handleRestoreShares}
@@ -489,7 +448,6 @@ export default function SplitRows({
               <span className="hidden sm:inline">{t("restoreWeightBtn", { fallback: "Khôi phục tỉ lệ" })}</span>
             </button>
 
-            {/* Nút Chia bằng nhau */}
             <button
               type="button"
               onClick={handleEqualSplit}
@@ -502,7 +460,6 @@ export default function SplitRows({
             </button>
           </div>
           
-          {/* Badge Thống kê Bên Phải */}
           <div className={`text-xs font-bold px-2.5 py-1.5 rounded-md shrink-0 ${
             selectedIds.size === 0 || (activeMode === "AMOUNT" && !isExactAmount)
               ? 'text-destructive bg-destructive/10'
@@ -519,23 +476,20 @@ export default function SplitRows({
       </div>
 
       {/* Danh sách participants */}
-      <div className="space-y-2.5 flex-1 overflow-y-auto scrollbar-hide min-h-[100px] px-1 pb-4 pt-1">
+      <div className="space-y-2.5 px-1 pb-4 pt-1">
         {participants.map((p) => {
           const isSelected = selectedIds.has(p.id);
           const shares = sharesMap[p.id] ?? (p.weight ?? 1);
           const amountVal = amountMap[p.id] ?? 0;
-          const isExpanded = expandedId === p.id;
 
           return (
             <div
               key={p.id}
               onClick={() => handleRowClick(p)}
               className={`bg-white p-2 sm:p-3 rounded-2xl border transition-all flex items-center justify-between gap-2 sm:gap-3 cursor-pointer ${
-                isExpanded
-                  ? 'border-blue-400 ring-2 ring-blue-500/20 shadow-lg scale-[1.01]'
-                  : isSelected
-                    ? 'border-blue-300 ring-1 ring-blue-500/10 shadow-sm'
-                    : 'border-slate-200/80 shadow-sm opacity-50'
+                isSelected
+                  ? 'border-blue-300 ring-1 ring-blue-500/10 shadow-sm'
+                  : 'border-slate-200/80 shadow-sm opacity-50'
               }`}
             >
               <div className="flex items-center gap-2 sm:gap-3 overflow-hidden flex-1 min-w-0">
@@ -560,89 +514,53 @@ export default function SplitRows({
                 </div>
               </div>
 
-              {/* Các ô nhập */}
-              {isExpanded ? (
-                <div
-                  className={`flex flex-col gap-1 shrink-0 ${activeMode === "SHARES" ? "items-center" : "items-end"}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <span className="text-[10px] font-medium text-slate-400">
-                    {activeMode === "SHARES" ? t("splitShares") : t("amount")}
-                  </span>
-                  {activeMode === "SHARES" ? (
-                    <>
-                      <Input
-                        ref={(el) => { inputRefs.current[p.id] = el; }}
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        value={shares === 0 ? "" : shares}
-                        onChange={(e) => handleSharesChange(p.id, e.target.value)}
-                        onBlur={() => setExpandedId(null)}
-                        className="w-28 h-14 rounded-2xl text-center font-black !text-2xl text-blue-700 bg-blue-50 border-blue-300 focus-visible:ring-2 focus-visible:ring-blue-600 shadow-inner"
-                      />
-                      <span className="text-xs font-semibold text-slate-500">
-                        ≈ {amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}
-                      </span>
-                    </>
-                  ) : (
+              {/* Các ô nhập (Fixed Auto-zoom iOS) */}
+              <div
+                className="flex items-center gap-1.5 sm:gap-2 shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Ô Tỉ lệ */}
+                <div className="w-[4.5rem] sm:w-[5rem] relative">
+                  {isSelected && activeMode === "SHARES" ? (
                     <Input
-                      ref={(el) => { inputRefs.current[p.id] = el; }}
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={shares === 0 ? "" : shares}
+                      onChange={(e) => handleSharesChange(p.id, e.target.value)}
+                      // FIX iOS ZOOM: Thay text-[13px] bằng text-base sm:text-sm, đổi height thành h-10
+                      className="w-full h-10 rounded-xl text-center font-bold text-base sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-1 shadow-inner"
+                      placeholder="0"
+                    />
+                  ) : (
+                    <div className={`w-full h-10 rounded-xl flex items-center justify-center font-bold text-sm sm:text-sm px-1 ${isSelected ? 'text-slate-400 bg-slate-50 border border-slate-200/50' : 'text-slate-400'}`}>
+                      {activeMode === "AMOUNT" ? "-" : (shares === 0 ? "-" : shares)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Phân cách */}
+                <div className="text-slate-300 font-medium text-xs sm:text-sm px-0.5">x</div>
+
+                {/* Ô Số tiền */}
+                <div className="w-[6rem] sm:w-[7rem] relative">
+                  {isSelected && activeMode === "AMOUNT" ? (
+                    <Input
                       type="text"
                       inputMode="numeric"
                       value={amountVal === 0 ? "" : amountVal.toLocaleString()}
                       onChange={(e) => handleAmountChange(p.id, e.target.value)}
-                      onBlur={() => setExpandedId(null)}
-                      className="w-36 h-14 rounded-2xl text-right font-black !text-2xl text-blue-700 bg-blue-50 border-blue-300 px-3 focus-visible:ring-2 focus-visible:ring-blue-600 shadow-inner"
+                      // FIX iOS ZOOM: Thay text-[13px] bằng text-base sm:text-sm, đổi height thành h-10
+                      className="w-full h-10 rounded-xl text-right font-bold text-base sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-2 shadow-inner"
+                      placeholder="0"
                     />
+                  ) : (
+                    <div className={`w-full h-10 rounded-xl flex items-center justify-end font-bold text-sm sm:text-sm px-2 ${isSelected ? 'text-slate-400 bg-slate-50 border border-slate-200/50 truncate' : 'text-slate-400 truncate'}`}>
+                      {amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}
+                    </div>
                   )}
                 </div>
-              ) : (
-                <div
-                  className="flex items-center gap-1.5 sm:gap-2 shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Ô Tỉ lệ */}
-                  <div className="w-[4rem] sm:w-[4.5rem] relative">
-                    {isSelected && activeMode === "SHARES" ? (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        value={shares === 0 ? "" : shares}
-                        onChange={(e) => handleSharesChange(p.id, e.target.value)}
-                        className="w-full h-9 rounded-xl text-center font-bold text-[13px] sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-1 shadow-inner"
-                        placeholder="0"
-                      />
-                    ) : (
-                      <div className={`w-full h-9 rounded-xl flex items-center justify-center font-bold text-[13px] sm:text-sm px-1 ${isSelected ? 'text-slate-400 bg-slate-50 border border-slate-200/50' : 'text-slate-400'}`}>
-                        {activeMode === "AMOUNT" ? "-" : (shares === 0 ? "-" : shares)}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Phân cách */}
-                  <div className="text-slate-300 font-medium text-xs sm:text-sm px-0.5">x</div>
-
-                  {/* Ô Số tiền */}
-                  <div className="w-[5.5rem] sm:w-[6.5rem] relative">
-                    {isSelected && activeMode === "AMOUNT" ? (
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={amountVal === 0 ? "" : amountVal.toLocaleString()}
-                        onChange={(e) => handleAmountChange(p.id, e.target.value)}
-                        className="w-full h-9 rounded-xl text-right font-bold text-[13px] sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-2 shadow-inner"
-                        placeholder="0"
-                      />
-                    ) : (
-                      <div className={`w-full h-9 rounded-xl flex items-center justify-end font-bold text-[13px] sm:text-sm px-2 ${isSelected ? 'text-slate-400 bg-slate-50 border border-slate-200/50 truncate' : 'text-slate-400 truncate'}`}>
-                        {amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           );
         })}
