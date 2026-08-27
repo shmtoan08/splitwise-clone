@@ -53,6 +53,7 @@ const expenseBaseSchema = z.object({
     .positive("Tỷ giá phải lớn hơn 0")
     .optional(),
   expenseDate: z.coerce.date().optional(),
+  receiptUrl: z.string().url().optional().nullable(),
 });
 
 export const addExpenseSchema = expenseBaseSchema.refine(

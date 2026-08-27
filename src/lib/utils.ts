@@ -58,3 +58,19 @@ export function parseAmount(value: string): number {
   const cleaned = value.replace(/[^\d]/g, "");
   return parseInt(cleaned, 10);
 }
+
+export function getOptimizedImageUrl(url: string | null): string {
+  if (!url) return "";
+  if (url.includes("res.cloudinary.com")) {
+    let optimizedUrl = url;
+    if (optimizedUrl.includes("/upload/v")) {
+      optimizedUrl = optimizedUrl.replace("/upload/v", "/upload/f_auto,q_auto/v");
+    } else if (optimizedUrl.includes("/upload/") && !optimizedUrl.includes("f_auto")) {
+      optimizedUrl = optimizedUrl.replace("/upload/", "/upload/f_auto,q_auto/");
+    }
+    // Đổi đuôi .heic thành .jpg để trình duyệt hiển thị được
+    optimizedUrl = optimizedUrl.replace(/\.heic([?#].*)?$/i, '.jpg$1');
+    return optimizedUrl;
+  }
+  return url;
+}

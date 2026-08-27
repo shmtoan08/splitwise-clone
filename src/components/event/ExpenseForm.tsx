@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { formatCurrency, getOptimizedImageUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,9 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { addExpense, updateExpense, deleteExpense } from "@/actions/expense";
+import { addExpense, updateExpense, deleteExpense, deleteReceiptFromCloudinary } from "@/actions/expense";
 import SplitRows from "./split-modes/SplitRows";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Camera, Loader2, Trash2 } from "lucide-react";
 
 type Participant = {
   id: string;
@@ -29,7 +30,7 @@ type Participant = {
 };
 
 type InitialExpense = {
-  id: string;
+  id?: string;
   title: string;
   amount: number;
   payerId: string;
@@ -38,6 +39,7 @@ type InitialExpense = {
   originalCurrency?: string | null;
   exchangeRate?: any;
   splitMode?: "AMOUNT" | "SHARES";
+  receiptUrl?: string | null;
   splits: { participantId: string; amount: number; shares?: number | null }[];
 };
 
@@ -58,7 +60,6 @@ type Props = {
   expensesCount?: number;
 };
 
-// Tiền tệ phổ biến được hỗ trợ (chọn originalCurrency)
 const POPULAR_CURRENCIES = ["VND", "JPY", "USD", "EUR", "SGD", "THB", "KRW"];
 
 type SplitMode = "AMOUNT" | "SHARES";
@@ -69,19 +70,83 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   const tErrors = useTranslations("errors");
   const tCurrency = useTranslations("currency");
   
-  const isEdit = !!initialExpense;
-  // Spec: default mode = SHARES cho khoản chi mới; edit = theo splitMode đã lưu
+  const isEdit = !!initialExpense?.id;
   const initialMode: SplitMode = initialExpense?.splitMode || "SHARES";
   
   const [title, setTitle] = useState(initialExpense?.title || t("expenseNumber", { number: (expensesCount || 0) + 1 }));
-  const [amountStr, setAmountStr] = useState(initialExpense?.amount ? initialExpense.amount.toLocaleString('en-US') : "");
+  const [amountStr, setAmountStr] = useState(initialExpense?.amount ? (initialExpense.originalCurrency ? (initialExpense.amount / (initialExpense.exchangeRate?.toNumber() || 1)).toLocaleString('en-US') : initialExpense.amount.toLocaleString('en-US')) : "");
+  
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(initialExpense?.receiptUrl || null);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const receiptUrlToReplaceRef = useRef<string | null>(initialExpense?.receiptUrl || null);
+  const receiptInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleUploadReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Ảnh không được vượt quá 5MB");
+      return;
+    }
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+    if (!cloudName || !uploadPreset) {
+      setError("Cloudinary chưa được cấu hình (.env)");
+      return;
+    }
+    setIsUploadingReceipt(true);
+    setError(null);
+    try {
+      if (receiptUrlToReplaceRef.current) {
+        const delRes = await deleteReceiptFromCloudinary(receiptUrlToReplaceRef.current);
+        if (!delRes.success) {
+          console.warn("Could not delete old receipt:", delRes.error);
+        }
+        // Sau khi xóa xong, xóa tham chiếu để tránh xóa nhầm lần sau
+        receiptUrlToReplaceRef.current = null;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", uploadPreset);
+      formData.append("folder", `split_app/events/${eventId}`);
+      
+      if (isEdit && initialExpense?.id) {
+        formData.append("public_id", `expense_${initialExpense.id}`);
+      } else {
+        formData.append("public_id", `expense_tmp_${Date.now()}`);
+      }
+      
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.secure_url) {
+        // Bypass cache by appending a timestamp query string
+        const freshUrl = `${data.secure_url}?t=${Date.now()}`;
+        setReceiptUrl(freshUrl);
+        receiptUrlToReplaceRef.current = data.secure_url;
+      } else {
+        throw new Error(data.error?.message || "Upload failed");
+      }
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      setError(`Lỗi tải ảnh: ${err.message || "Vui lòng thử lại."}`);
+    } finally {
+      setIsUploadingReceipt(false);
+      e.target.value = "";
+    }
+  };
+
   const [payerId, setPayerId] = useState(initialExpense?.payerId || participants[0]?.id || "");
   const [expenseDateStr, setExpenseDateStr] = useState(
     initialExpense?.expenseDate 
       ? initialExpense.expenseDate.toISOString().split("T")[0] 
       : new Date().toISOString().split("T")[0]
   );
-  // Set default payer to current user for new expenses
+
   useEffect(() => {
     if (!initialExpense) {
       const match = document.cookie.split("; ").find((row) => row.startsWith("split-app-device-token="));
@@ -95,7 +160,6 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
 
   const [activeMode, setActiveMode] = useState<SplitMode>(initialMode);
   
-  // Multi-currency
   const [originalCurrency, setOriginalCurrency] = useState<string | undefined>(initialExpense?.originalCurrency || undefined);
   const [manualRateStr, setManualRateStr] = useState(initialExpense?.exchangeRate ? initialExpense.exchangeRate.toString() : "");
   const [needsManualRate, setNeedsManualRate] = useState(false);
@@ -105,7 +169,6 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   );
 
   const [isSplitValid, setIsSplitValid] = useState(true);
-  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,10 +203,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
     setIsLoading(true);
     setError(null);
 
-    let splitConfig: any = { mode: activeMode };
-    // SplitRows đã trả về danh sách được lọc (checked) với đúng cấu trúc
-    splitConfig.splits = splits;
-
+    let splitConfig: any = { mode: activeMode, splits };
     const manualRate = manualRateStr ? parseFloat(manualRateStr.replace(/,/g, ".")) : undefined;
 
     const payload: any = {
@@ -155,6 +215,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
       originalCurrency: originalCurrency || undefined,
       manualExchangeRate: manualRate,
       expenseDate: new Date(expenseDateStr),
+      receiptUrl,
     };
 
     let res;
@@ -172,7 +233,6 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
       } else if (res.error === "NOT_FOUND") {
         setError(tErrors("expenseNotFound"));
       } else if (res.error?.startsWith("EXCHANGE_RATE_UNAVAILABLE:")) {
-        // API tỷ giá lỗi → yêu cầu nhập tay
         setNeedsManualRate(true);
         setError(tCurrency("apiUnavailable"));
       } else {
@@ -183,7 +243,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
       setIsLoading(false);
       onOpenChange(false);
       if (!isEdit) {
-        setTitle("");
+        setTitle(t("expenseNumber", { number: (expensesCount || 0) + 2 }));
         setAmountStr("");
         setActiveMode("SHARES");
         setSplits([]);
@@ -191,12 +251,13 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
         setManualRateStr("");
         setNeedsManualRate(false);
         setExpenseDateStr(new Date().toISOString().split("T")[0]);
+        setReceiptUrl(null);
       }
     }
   };
 
   const handleDelete = async () => {
-    if (!initialExpense) return;
+    if (!initialExpense?.id) return;
     if (confirm(t("deleteConfirmMessage"))) {
       setIsLoading(true);
       setError(null);
@@ -223,8 +284,6 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   const content = (
     <div className="px-4 sm:px-6 py-0 flex flex-col gap-5 flex-1 min-h-0">
       {error && <p className="text-sm text-destructive font-medium p-3 bg-destructive/10 rounded-xl text-center">{error}</p>}
-      
-      {/* Removed unsupportedSplitMode banner */}
 
       <div className="flex flex-col items-center py-2 relative">
         <div className="relative flex items-center justify-center w-full">
@@ -234,33 +293,33 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
             placeholder={t("amountPlaceholder")} 
             value={amountStr} 
             onChange={(e) => handleAmountChange(e.target.value)} 
-            className={`w-full text-center font-black h-24 bg-transparent border-none shadow-none focus-visible:ring-0 text-blue-600 pl-6 pr-32 sm:pl-10 sm:pr-36 placeholder:text-slate-300 placeholder:font-semibold transition-all duration-200 ${getAmountFontSize()}`}
+            className={`w-full text-center font-black h-20 sm:h-24 bg-transparent border-none shadow-none focus-visible:ring-0 text-blue-600 pl-4 pr-20 sm:pl-10 sm:pr-36 placeholder:text-slate-300 placeholder:font-semibold transition-all duration-200 ${getAmountFontSize()}`}
             disabled={isLoading}
           />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <Select
-                value={originalCurrency ?? currency}
-                onValueChange={(val) => {
-                  if (val === currency) {
-                    setOriginalCurrency(undefined);
-                  } else {
-                    setOriginalCurrency(val || undefined);
-                  }
-                  setNeedsManualRate(false);
-                  setManualRateStr("");
-                }}
-                disabled={isLoading}
-              >
-                <SelectTrigger className="border-none shadow-none text-2xl font-black text-blue-400 opacity-70 bg-transparent hover:bg-slate-100/50 p-1 px-2 focus:ring-0 w-auto focus:bg-slate-100/50 outline-none">
-                  <SelectValue placeholder={currency} />
-                </SelectTrigger>
-                <SelectContent>
-                  {POPULAR_CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <Select
+              value={originalCurrency ?? currency}
+              onValueChange={(val) => {
+                if (val === currency) {
+                  setOriginalCurrency(undefined);
+                } else {
+                  setOriginalCurrency(val || undefined);
+                }
+                setNeedsManualRate(false);
+                setManualRateStr("");
+              }}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="border-none shadow-none text-2xl font-black text-blue-400 opacity-70 bg-transparent hover:bg-slate-100/50 p-1 px-2 focus:ring-0 w-auto focus:bg-slate-100/50 outline-none">
+                <SelectValue placeholder={currency} />
+              </SelectTrigger>
+              <SelectContent>
+                {POPULAR_CURRENCIES.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         
         {isEdit && initialExpense?.originalCurrency && initialExpense.originalCurrency !== currency && initialExpense.exchangeRate && (
@@ -270,7 +329,6 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
           </div>
         )}
 
-        {/* Fallback: nhập tỷ giá tay khi API không khả dụng */}
         {needsManualRate && originalCurrency && originalCurrency !== currency && (
           <div className="flex items-start gap-2 mt-3 p-3 w-full bg-amber-50 border border-amber-200 rounded-xl">
             <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
@@ -290,36 +348,120 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
         )}
       </div>
 
-      <div className="flex flex-row gap-3">
-        <div className="w-[145px] shrink-0">
-          <Input 
-            type="date"
-            placeholder={t("expenseDate")}
-            value={expenseDateStr} 
-            onChange={(e) => setExpenseDateStr(e.target.value)} 
-            disabled={isLoading}
-            className="h-11 w-full rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-blue-600 focus-visible:bg-white text-slate-700"
-          />
+      {/* Cụm Ngày tháng, Người trả & Hóa đơn (2 dòng) */}
+      <div className="flex flex-col gap-3">
+        {/* Dòng 1: Người trả (Trọn 100% bề ngang) */}
+        <div className="w-full">
+          <Select value={payerId} onValueChange={(val) => setPayerId(val || "")} disabled={isLoading}>
+            <SelectTrigger className="w-full !h-11 rounded-xl bg-slate-50 border-slate-200 focus:ring-blue-600 font-medium text-xs sm:text-sm px-3 flex items-center justify-between">
+              <SelectValue placeholder={t("paidBy")}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-slate-400 shrink-0">{t("paidBy")}</span>
+                  <span className="truncate text-slate-800 font-semibold">
+                    {participants.find((p) => p.id === payerId)?.name}
+                  </span>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {participants.map((p) => (
+                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="flex-1">
-          <Select value={payerId} onValueChange={(val) => setPayerId(val || "")} disabled={isLoading}>
-            <SelectTrigger className="w-full !h-11 rounded-xl bg-slate-50 border-slate-200 focus:ring-blue-600 font-medium">
-                <SelectValue placeholder={t("paidBy")}>
-                  <span className="text-slate-400 mr-1">{t("paidBy")}</span> 
-                  {participants.find(p => p.id === payerId)?.name}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {participants.map(p => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Dòng 2: Ngày phát sinh (Trái) + Nút Upload/Thumbnail Hóa đơn (Phải) */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Ô Chọn ngày */}
+          <div className="w-[125px] sm:w-[145px] shrink-0">
+            <Input
+              type="date"
+              value={expenseDateStr}
+              onChange={(e) => setExpenseDateStr(e.target.value)}
+              disabled={isLoading}
+              className="h-11 min-h-0 max-h-11 leading-none py-0 w-full rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-blue-600 text-slate-700 text-xs sm:text-sm px-3 flex items-center appearance-none [&::-webkit-date-and-time-value]:min-h-0 [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:leading-none"
+            />
+          </div>
+
+          {/* Nút Upload / Preview Thumbnail */}
+          {/* Input file dùng chung, ẩn, trigger bằng ref */}
+<input
+  ref={receiptInputRef}
+  type="file"
+  accept="image/*"
+  className="hidden"
+  onChange={handleUploadReceipt}
+  disabled={isLoading || isUploadingReceipt}
+/>
+
+    {/* Nút Upload / Preview Thumbnail */}
+    <div className="shrink-0">
+      {receiptUrl ? (
+        <div className="flex items-center gap-1.5">
+          {/* Thumbnail preview — vẫn chạm để đổi, có icon xóa riêng ở góc */}
+          <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-blue-200 bg-slate-100 shrink-0">
+            <button
+              type="button"
+              onClick={() => receiptInputRef.current?.click()}
+              disabled={isLoading || isUploadingReceipt}
+              className="w-full h-full block disabled:opacity-60"
+              title={t("changeReceipt", { fallback: "Đổi ảnh khác" })}
+            >
+              <img src={getOptimizedImageUrl(receiptUrl)} alt="Receipt" className="w-full h-full object-cover" />
+              {isUploadingReceipt && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                </div>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setReceiptUrl(null)}
+              disabled={isLoading || isUploadingReceipt}
+              className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
+              title={t("removeReceipt", { fallback: "Xóa ảnh" })}
+            >
+              <Trash2 className="w-2.5 h-2.5" />
+            </button>
+          </div>
+
+          {/* Icon camera riêng — tường minh, không cần đoán chạm vào ảnh */}
+          <button
+            type="button"
+            onClick={() => receiptInputRef.current?.click()}
+            disabled={isLoading || isUploadingReceipt}
+            className="w-11 h-11 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-blue-600 transition-all active:scale-95 shrink-0"
+            title={t("changeReceipt", { fallback: "Đổi ảnh khác" })}
+          >
+            {isUploadingReceipt ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Camera className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+      ) : (
+        /* Trạng thái chưa có ảnh — giữ nguyên như bản trước */
+        <button
+          type="button"
+          onClick={() => receiptInputRef.current?.click()}
+          disabled={isLoading || isUploadingReceipt}
+          className="h-11 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 text-xs font-semibold text-slate-700 transition-all active:scale-95"
+        >
+          {isUploadingReceipt ? (
+            <Loader2 className="w-4 h-4 text-blue-600 shrink-0 animate-spin" />
+          ) : (
+            <Camera className="w-4 h-4 text-blue-600 shrink-0" />
+          )}
+          <span className="hidden sm:inline">{t("attachReceipt", { fallback: "Đính kèm" })}</span>
+          <span className="inline sm:hidden">{t("attachReceipt", { fallback: "Thêm ảnh" })}</span>
+        </button>
+      )}
+    </div>
+
         </div>
       </div>
-
-      {/* ── Removed Tiền tệ gốc block from here ── */}
 
       <div className="pt-2 pb-0 flex flex-col flex-1 min-h-0">
         <SplitRows 
@@ -345,9 +487,8 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
       <Button onClick={() => onOpenChange(false)} variant="secondary" className="flex-1 h-12 rounded-full font-medium active:scale-95 transition-all shadow-sm text-base bg-slate-100 hover:bg-slate-200 text-slate-700 border-none">
         {tCommon("close") || "Đóng"}
       </Button>
-      {/* BUG3 FIX: disabled theo tab đang active */}
-      <Button onClick={handleSubmit} disabled={isLoading || !isSplitValid} className={`${isEdit ? 'flex-[1.5]' : 'flex-1'} h-12 rounded-full font-medium active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-sm text-base`}>
-        {isLoading ? tCommon("loading") : (isEdit ? t("update") : t("save"))}
+      <Button onClick={handleSubmit} disabled={isLoading || !isSplitValid || isUploadingReceipt} className={`${isEdit ? 'flex-[1.5]' : 'flex-1'} h-12 rounded-full font-medium active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-sm text-base`}>
+        {isLoading || isUploadingReceipt ? tCommon("loading") : (isEdit ? t("update") : t("save"))}
       </Button>
       {isEdit && (
         <Button onClick={handleDelete} disabled={isLoading} variant="destructive" className="flex-1 h-12 rounded-full font-medium active:scale-95 transition-all shadow-sm text-base bg-red-50 hover:bg-red-100 text-red-600 border-none">

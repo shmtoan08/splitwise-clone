@@ -127,6 +127,8 @@ model Expense {
   expenseDate      DateTime @default(now())
   /// Chế độ chia tiền
   splitMode        SplitMode @default(AMOUNT)
+  /// Link hóa đơn đính kèm (Cloudinary URL)
+  receiptUrl       String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   /// Optimistic locking — tăng mỗi lần update để tránh 2 người ghi đè nhau

@@ -13,6 +13,14 @@ import type { ActionResult } from "@/types";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { getExchangeRate, ExchangeRateError } from "@/lib/exchangeRate";
+import { v2 as cloudinary } from "cloudinary";
+
+// Cấu hình Cloudinary SDK ở Server (dùng API Secret an toàn)
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const DEVICE_TOKEN_COOKIE = "split-app-device-token";
 
@@ -42,6 +50,41 @@ async function resolveExchangeRate(
   }
 }
 
+/**
+ * Hàm trích xuất public_id từ Cloudinary URL
+ * Ví dụ: https://res.cloudinary.com/cloud/image/upload/v123456/split_app/events/e1/abc.jpg
+ * => public_id: "split_app/events/e1/abc"
+ */
+function getPublicIdFromUrl(url: string): string | null {
+  try {
+    const regex = /\/v\d+\/(.+?)\.[a-zA-Z0-9]+(?:[?#].*)?$/i;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteReceiptFromCloudinary(receiptUrl: string) {
+  if (!receiptUrl) return { success: true };
+
+  const publicId = getPublicIdFromUrl(receiptUrl);
+  if (!publicId) {
+    return { success: false, error: "URL hóa đơn không hợp lệ" };
+  }
+
+  try {
+    const result = await cloudinary.uploader.destroy(publicId);
+    if (result.result === "ok" || result.result === "not_found") {
+      return { success: true };
+    }
+    return { success: false, error: result.result };
+  } catch (error: any) {
+    console.error("Lỗi xóa ảnh trên Cloudinary:", error);
+    return { success: false, error: error.message || "Xóa ảnh thất bại" };
+  }
+}
+
 export async function addExpense(data: unknown): Promise<ActionResult> {
   const parsed = addExpenseSchema.safeParse(data);
   if (!parsed.success) {
@@ -49,7 +92,7 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
     return { success: false, error: `Dữ liệu không hợp lệ: ${errors}` };
   }
 
-  const { eventId, title, amount, payerId, splitConfig, originalCurrency, manualExchangeRate, expenseDate } = parsed.data;
+  const { eventId, title, amount, payerId, splitConfig, originalCurrency, manualExchangeRate, expenseDate, receiptUrl } = parsed.data;
 
   try {
     // 1. Lấy baseCurrency của event
@@ -129,6 +172,8 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
 
     const createdById = currentParticipant.id;
 
+    let createdExpenseId: string | null = null;
+
     // 6. Tạo Expense + Splits trong transaction
     await prisma.$transaction(async (tx) => {
       const expense = await tx.expense.create({
@@ -145,8 +190,10 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
           isCrossSubsidy: false,
           expenseDate: expenseDate ?? new Date(),
           splitMode: splitConfig.mode as any,
+          receiptUrl: receiptUrl ?? null,
         },
       });
+      createdExpenseId = expense.id;
 
       await tx.expenseSplit.createMany({
         data: calculatedSplits.map((split) => ({
@@ -157,6 +204,23 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
         })),
       });
     });
+
+    if (createdExpenseId && receiptUrl && receiptUrl.includes("expense_tmp_")) {
+      const oldPublicId = getPublicIdFromUrl(receiptUrl);
+      if (oldPublicId) {
+        const newPublicId = `split_app/events/${eventId}/expense_${createdExpenseId}`;
+        try {
+          const renameRes = await cloudinary.uploader.rename(oldPublicId, newPublicId, { overwrite: true });
+          const freshUrl = `${renameRes.secure_url}?t=${Date.now()}`;
+          await prisma.expense.update({
+            where: { id: createdExpenseId },
+            data: { receiptUrl: freshUrl }
+          });
+        } catch (err) {
+          console.error("Lỗi rename cloudinary:", err);
+        }
+      }
+    }
 
     revalidatePath(`/e/${eventId}`);
     return { success: true, data: undefined };
@@ -173,13 +237,13 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
     return { success: false, error: `Dữ liệu không hợp lệ: ${errors}` };
   }
 
-  const { id, eventId, title, amount, payerId, splitConfig, currentVersion, originalCurrency, manualExchangeRate, expenseDate } = parsed.data;
+  const { id, eventId, title, amount, payerId, splitConfig, currentVersion, originalCurrency, manualExchangeRate, expenseDate, receiptUrl } = parsed.data;
 
   try {
-    // 1. Lấy bản ghi expense cũ (để kiểm tra originalCurrency đã lưu)
+    // 1. Lấy bản ghi expense cũ (để kiểm tra originalCurrency đã lưu và receiptUrl)
     const [eventRecord, existingExpense] = await Promise.all([
       prisma.event.findUnique({ where: { id: eventId }, select: { baseCurrency: true } }),
-      prisma.expense.findUnique({ where: { id }, select: { originalCurrency: true, exchangeRate: true } }),
+      prisma.expense.findUnique({ where: { id }, select: { originalCurrency: true, exchangeRate: true, receiptUrl: true } }),
     ]);
 
     if (!eventRecord) return { success: false, error: "Sự kiện không tồn tại." };
@@ -269,6 +333,7 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
           exchangeRate: snapshotRate,
           expenseDate: expenseDate ?? new Date(),
           splitMode: splitConfig.mode as any,
+          receiptUrl: receiptUrl ?? null,
         },
       });
 
@@ -281,6 +346,13 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
         })),
       });
     });
+
+    // Delete old receipt from Cloudinary if it was removed or changed
+    if (existingExpense.receiptUrl && existingExpense.receiptUrl !== receiptUrl) {
+      deleteReceiptFromCloudinary(existingExpense.receiptUrl).catch((err) => {
+        console.error("Failed to delete old receipt on update:", err);
+      });
+    }
 
     revalidatePath(`/e/${eventId}`);
     return { success: true, data: undefined };

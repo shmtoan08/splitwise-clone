@@ -99,6 +99,7 @@ export async function getEventById(eventId: string) {
             exchangeRate: true,
             isCrossSubsidy: true,
             splitMode: true,
+            receiptUrl: true,
             splits: {
               select: {
                 participantId: true,

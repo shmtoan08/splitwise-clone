@@ -3,9 +3,20 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import ExpenseForm from "./ExpenseForm";
-import { Plus, ReceiptText, Calendar, Users } from "lucide-react";
+import ReceiptViewerModal from "./ReceiptViewerModal";
+import { Plus, ReceiptText, Calendar, Users, FileText, CreditCard, CopyPlus, Trash2, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { deleteExpense } from "@/actions/expense";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 type Participant = {
   id: string;
@@ -24,6 +35,7 @@ type Expense = {
   originalCurrency?: string | null;
   exchangeRate?: any;
   splitMode?: "AMOUNT" | "SHARES";
+  receiptUrl?: string | null;
   splits: { participantId: string; amount: number }[];
 };
 
@@ -44,9 +56,27 @@ type Props = {
 export default function ExpenseTab({ eventId, participants, expenses, currency, groups = [] }: Props) {
   const t = useTranslations("event");
   const tExpense = useTranslations("expense");
+  const tCommon = useTranslations("common");
 
   const [selectedExpense, setSelectedExpense] = useState<Expense | undefined>(undefined);
   const [formOpen, setFormOpen] = useState(false);
+  const [viewingReceipt, setViewingReceipt] = useState<{ url: string; title: string } | null>(null);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  const [deleteConfirmExp, setDeleteConfirmExp] = useState<Expense | null>(null);
+
+  const handleDeleteClick = (e: React.MouseEvent, exp: Expense) => {
+    e.stopPropagation();
+    setDeleteConfirmExp(exp);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmExp) return;
+    setIsDeletingId(deleteConfirmExp.id);
+    const expId = deleteConfirmExp.id;
+    setDeleteConfirmExp(null); // Đóng modal ngay
+    await deleteExpense(expId, eventId);
+    setIsDeletingId(null);
+  };
 
   const handleOpenEdit = (exp: Expense) => {
     if (exp.isCrossSubsidy) return;
@@ -84,30 +114,60 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
                       : "border-slate-200/80 shadow-sm hover:shadow-md hover:border-blue-200 cursor-pointer"
                   }`}
                 >
-                  <div className="flex justify-between items-start mb-3 gap-4">
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                      <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center ${exp.isCrossSubsidy ? 'bg-emerald-100' : 'bg-blue-50'}`}>
-                        <ReceiptText className={`w-5 h-5 ${exp.isCrossSubsidy ? 'text-emerald-600' : 'text-blue-500'}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-slate-900 text-base sm:text-lg leading-tight truncate">{exp.title}</h4>
-                        {exp.isCrossSubsidy && (
-                          <Badge className="mt-1 text-[9px] bg-emerald-100 text-emerald-700 border-transparent hover:bg-emerald-200">AUTO</Badge>
-                        )}
-                        {!exp.isCrossSubsidy && (
-                          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-1">
-                            <Calendar className="w-3.5 h-3.5 shrink-0" />
-                            <span>{new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(exp.expenseDate || exp.createdAt))}</span>
-                          </div>
-                        )}
-                      </div>
+                  <div className="flex justify-between items-start mb-3 gap-3 sm:gap-4">
+                    {/* TRÁI: NÚT XEM HÓA ĐƠN HOẶC ICON MẶC ĐỊNH */}
+                    <div className="shrink-0 mt-0.5">
+                      {!exp.isCrossSubsidy && exp.receiptUrl ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation(); // Chặn mở Form Edit
+                            setViewingReceipt({ url: exp.receiptUrl!, title: exp.title });
+                          }}
+                          // Thiết kế nút bự, bo góc vuông vắn để giống "Thumbnail"
+                          className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex flex-col items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 active:scale-95 transition-all shadow-sm group"
+                        >
+                          <FileText className="w-4 h-4 mb-0.5 group-hover:scale-110 transition-transform" /> 
+                          <span className="text-[9px] font-black uppercase tracking-wider">{tExpense("receipt", { fallback: "Bill" })}</span>
+                        </button>
+                      ) : (
+                        <div className={`w-11 h-11 rounded-full flex items-center justify-center ${exp.isCrossSubsidy ? 'bg-emerald-100' : 'bg-slate-100'}`}>
+                          {exp.isCrossSubsidy ? (
+                            <ReceiptText className="w-5 h-5 text-emerald-600" />
+                          ) : (
+                            <CreditCard className="w-5 h-5 text-slate-300" /> 
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-right shrink-0 flex flex-col items-end justify-center h-10">
+
+                    {/* GIỮA: TIÊU ĐỀ & NGÀY THÁNG (Đã được làm sạch) */}
+                    <div className="flex-1 min-w-0 py-0.5">
+                      <h4 className="font-bold text-slate-900 text-base sm:text-lg leading-tight truncate">
+                        {exp.title}
+                      </h4>
+                      {exp.isCrossSubsidy ? (
+                        <Badge className="mt-1.5 text-[9px] bg-emerald-100 text-emerald-700 border-transparent hover:bg-emerald-200">
+                          AUTO
+                        </Badge>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-1.5">
+                          <span>
+                            {new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(exp.expenseDate || exp.createdAt))}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* PHẢI: SỐ TIỀN TỔNG (Giữ nguyên của bạn) */}
+                    <div className="text-right shrink-0 flex flex-col items-end justify-center h-11">
                       <span className="font-extrabold text-slate-900 text-lg sm:text-xl tracking-tight">
                         {formatCurrency(exp.amount, { currency })}
                       </span>
                       {exp.originalCurrency && exp.originalCurrency !== currency && (
-                        <span className="block text-[10px] sm:text-xs text-slate-400 font-semibold">{exp.originalCurrency}</span>
+                        <span className="block text-[10px] sm:text-xs text-slate-400 font-semibold mt-0.5">
+                          {exp.originalCurrency}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -123,15 +183,53 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
                         <span>{tExpense("splitWith", { count: exp.splits.length })}</span>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {exp.splits.map((s: any) => {
-                        const pName = participants.find(p => p.id === s.participantId)?.name || "Unknown";
-                        return (
-                          <span key={s.participantId} className="px-2 py-0.5 border border-slate-200 bg-white rounded-md text-[11px] font-medium text-slate-600 shadow-sm truncate max-w-[120px]">
-                            {pName}
-                          </span>
-                        );
-                      })}
+                    <div className="flex items-end justify-between gap-2 mt-1">
+                      <div className="flex flex-wrap gap-1.5">
+                        {exp.splits.map((s: any) => {
+                          const pName = participants.find(p => p.id === s.participantId)?.name || "Unknown";
+                          return (
+                            <span key={s.participantId} className="px-2 py-0.5 border border-slate-200 bg-white rounded-md text-[11px] font-medium text-slate-600 shadow-sm truncate max-w-[120px]">
+                              {pName}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      
+                      {!exp.isCrossSubsidy && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedExpense({
+                                ...exp,
+                                id: undefined as any,
+                                version: 1,
+                                receiptUrl: null
+                              });
+                              setFormOpen(true);
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-100 bg-blue-50 hover:bg-blue-100 active:scale-95 transition-all text-blue-600 shadow-sm group"
+                          >
+                            <CopyPlus className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" />
+                            <span className="text-[11px] font-semibold">{tExpense("clone", { fallback: "Nhân bản" })}</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteClick(e, exp)}
+                            disabled={isDeletingId === exp.id}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-red-100 bg-red-50 hover:bg-red-100 active:scale-95 transition-all text-red-500 shadow-sm disabled:opacity-50 group"
+                          >
+                            {isDeletingId === exp.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                            )}
+                            <span className="text-[11px] font-semibold">{tCommon("delete", { fallback: "Xóa" })}</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -155,7 +253,6 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
         />
       )}
 
-      {/* Floating Action Button (FAB): Đã cân chỉnh chuẩn Mobile 414px & Safe Area */}
       <div className="absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 flex justify-center pointer-events-none z-40 w-full px-4">
         <button
           onClick={handleOpenAdd}
@@ -165,6 +262,42 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
           <span className="text-sm sm:text-base tracking-tight whitespace-nowrap">{t("addExpense")}</span>
         </button>
       </div>
+
+      <ReceiptViewerModal
+        isOpen={!!viewingReceipt}
+        onClose={() => setViewingReceipt(null)}
+        imageUrl={viewingReceipt?.url || ""}
+        title={viewingReceipt?.title || ""}
+      />
+
+      <Dialog open={!!deleteConfirmExp} onOpenChange={(open) => !open && setDeleteConfirmExp(null)}>
+        <DialogContent className="max-w-xs rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg">{tExpense("deleteConfirmTitle", { fallback: "Xóa chi tiêu?" })}</DialogTitle>
+            <DialogDescription className="text-center text-slate-500 mt-2">
+              {tExpense("deleteConfirmMessage", { fallback: "Bạn có chắc chắn muốn xóa chi tiêu này không?" })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 mt-4 sm:space-x-0">
+            <Button
+              type="button"
+              variant="destructive"
+              className="w-full rounded-full h-12 font-bold"
+              onClick={confirmDelete}
+            >
+              {tCommon("delete", { fallback: "Xóa" })}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full rounded-full h-12 font-bold bg-white"
+              onClick={() => setDeleteConfirmExp(null)}
+            >
+              {tCommon("cancel", { fallback: "Hủy" })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { splitByShares, splitEvenly } from "@/utils/algorithm";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { formatCurrency } from "@/lib/utils";
-import { User, RotateCcw, Equal, AlertCircle } from "lucide-react";
+import { User, RotateCcw, Equal, AlertCircle, CheckSquare, Square } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 
@@ -111,6 +111,9 @@ export default function SplitRows({
   // Recalculate implicitly when totalAmount changes
   const hasInitialized = useRef(false);
   const prevTotalAmount = useRef(totalAmount);
+  
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     if (!hasInitialized.current) {
@@ -178,23 +181,47 @@ export default function SplitRows({
     onValidityChangeRef.current(valid);
   }, [selectedIds, amountMap, sharesMap, activeMode, totalAmount]);
 
+  useEffect(() => {
+    if (expandedId) {
+      const el = inputRefs.current[expandedId];
+      el?.focus();
+      el?.select();
+    }
+  }, [expandedId]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
+  // State kiểm tra đã chọn đủ tất cả thành viên chưa
+  const isAllSelected = selectedIds.size === participants.length && participants.length > 0;
 
+  // Hàm toggle chọn/bỏ chọn tất cả
+  const handleToggleSelectAll = () => {
+    setExpandedId(null);
+    executeAction(() => {
+      if (isAllSelected) {
+        setSelectedIds(new Set());
+        setAmountMap({});
+      } else {
+        const next = new Set(participants.map((p) => p.id));
+        setSelectedIds(next);
+        const newAmountMap = recalculateAmounts(activeMode, next, sharesMap);
+        setAmountMap(newAmountMap);
+      }
+    });
+  };
   const executeAction = useCallback((action: () => void) => {
-    if (isCustomized) {
+    if (isCustomized && totalAmount > 0) {
       setPendingAction(() => action);
     } else {
       action();
-      setIsCustomized(true);
+      setIsCustomized(false);
     }
-  }, [isCustomized]);
+  }, [isCustomized, totalAmount]);
 
   const handleConfirm = useCallback(() => {
     if (pendingAction) {
       pendingAction();
       setPendingAction(null);
-      setIsCustomized(true);
+      setIsCustomized(false);
     }
   }, [pendingAction]);
 
@@ -203,30 +230,16 @@ export default function SplitRows({
   }, []);
 
   const handleToggle = useCallback((participantId: string, checked: boolean) => {
-    if (!checked) {
-      executeAction(() => {
-        setSelectedIds(prev => {
-          const next = new Set(prev);
-          next.delete(participantId);
-          
-          // Recalculate remaining
-          const newAmountMap = recalculateAmounts(activeMode, next, sharesMap);
-          setAmountMap(am => {
-            const nextAm = { ...am };
-            for (const id of Array.from(next)) nextAm[id] = newAmountMap[id] ?? 0;
-            return nextAm;
-          });
-          
-          return next;
-        });
-      });
-    } else {
-      // Bật lại không cảnh báo xoá dữ liệu người khác (vì đang thêm người vào)
+    executeAction(() => {
       setSelectedIds(prev => {
         const next = new Set(prev);
-        next.add(participantId);
+        if (checked) {
+          next.add(participantId);
+        } else {
+          next.delete(participantId);
+        }
         
-        // Recalculate with restored id
+        // Recalculate remaining
         const newAmountMap = recalculateAmounts(activeMode, next, sharesMap);
         setAmountMap(am => {
           const nextAm = { ...am };
@@ -236,11 +249,11 @@ export default function SplitRows({
         
         return next;
       });
-      setIsCustomized(true);
-    }
+    });
   }, [executeAction, activeMode, sharesMap, recalculateAmounts]);
 
   const handleGroupClick = useCallback((group: Group) => {
+    setExpandedId(null);
     executeAction(() => {
       const groupMemberIds = group.members.map(m => m.participantId);
       const validIds = new Set(groupMemberIds.filter(id => participants.some(p => p.id === id)));
@@ -257,6 +270,7 @@ export default function SplitRows({
   }, [executeAction, participants, activeMode, sharesMap, recalculateAmounts]);
 
   const handleRestoreShares = useCallback(() => {
+    setExpandedId(null);
     const action = () => {
       setActiveMode("SHARES");
       setSharesMap(prev => {
@@ -288,6 +302,7 @@ export default function SplitRows({
   }, [isCustomized, selectedIds, participants, recalculateAmounts]);
 
   const handleEqualSplit = useCallback(() => {
+    setExpandedId(null);
     const action = () => {
       setActiveMode("AMOUNT");
       const newAmountMap = recalculateAmounts("AMOUNT", selectedIds, sharesMap);
@@ -346,6 +361,24 @@ export default function SplitRows({
     });
   }, [activeMode, selectedIds, recalculateAmounts]);
 
+  const handleRowClick = useCallback((p: Participant) => {
+  if (!selectedIds.has(p.id)) {
+    // Bấm vào dòng chưa check → tự check để có thể nhập luôn
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.add(p.id);
+      const newAmountMap = recalculateAmounts(activeMode, next, sharesMap);
+      setAmountMap(am => {
+        const nextAm = { ...am };
+        for (const id of Array.from(next)) nextAm[id] = newAmountMap[id] ?? 0;
+        return nextAm;
+      });
+      return next;
+    });
+    setIsCustomized(true);
+  }
+  setExpandedId(prev => (prev === p.id ? null : p.id));
+}, [selectedIds, activeMode, sharesMap, recalculateAmounts]);
   // ─── Render calculations ────────────────────────────────────────────────────
   
   let currentTotalAmount = 0;
@@ -412,34 +445,65 @@ export default function SplitRows({
       {/* Hint & Header Buttons */}
       <div className="flex flex-col gap-2 px-1">
         <div className="text-xs font-medium text-slate-500 bg-slate-100 px-3 py-2 rounded-lg leading-relaxed shadow-inner">
-          {activeMode === "AMOUNT" ? t("lockedByAmountHint", { fallback: "Đang chia theo số tiền — bấm Khôi phục tỉ lệ để chỉnh lại tỉ lệ" }) : t("lockedBySharesHint", { fallback: "Đang chia theo tỉ lệ — bấm Chia bằng nhau để chỉnh trực tiếp số tiền" })}
+          {activeMode === "AMOUNT" 
+            ? t("lockedByAmountHint", { fallback: "Đang chia theo số tiền — bấm Khôi phục tỉ lệ để chỉnh lại tỉ lệ" }) 
+            : t("lockedBySharesHint", { fallback: "Đang chia theo tỉ lệ — bấm Chia bằng nhau để chỉnh trực tiếp số tiền" })}
         </div>
         
-        <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 mt-1">
+          {/* Cụm 3 Nút Thao Tác Bên Trái */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Nút Chọn / Bỏ chọn tất cả */}
+            <button
+              type="button"
+              onClick={handleToggleSelectAll}
+              className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
+                isAllSelected 
+                  ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
+                  : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
+              }`}
+              title={isAllSelected ? t("unselectAll", { fallback: "Bỏ chọn tất cả" }) : t("selectAll", { fallback: "Chọn tất cả" })}
+            >
+              {isAllSelected ? (
+                <CheckSquare className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              ) : (
+                <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              )}
+              <span className="hidden sm:inline">
+                {isAllSelected ? t("unselectAll", { fallback: "Bỏ chọn tất cả" }) : t("selectAll", { fallback: "Chọn tất cả" })}
+              </span>
+              <span className="inline sm:hidden">
+                {isAllSelected ? t("unselect", { fallback: "Bỏ chọn" }) : t("all", { fallback: "Tất cả" })}
+              </span>
+            </button>
+
+            {/* Nút Khôi phục tỉ lệ */}
             <button
               type="button"
               onClick={handleRestoreShares}
-              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all active:scale-95 ${
+              className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
                 activeMode === "SHARES" ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
               }`}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              {t("restoreWeightBtn", { fallback: "Khôi phục tỉ lệ" })}
+              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">{t("restoreWeightBtn", { fallback: "Khôi phục tỉ lệ" })}</span>
             </button>
+
+            {/* Nút Chia bằng nhau */}
             <button
               type="button"
               onClick={handleEqualSplit}
-              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all active:scale-95 ${
+              className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
                 activeMode === "AMOUNT" ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
               }`}
             >
-              <Equal className="w-3.5 h-3.5" />
-              {t("splitEvenlyBtn", { fallback: "Chia bằng nhau" })}
+              <Equal className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">{t("splitEvenlyBtn", { fallback: "Chia bằng nhau" })}</span>
             </button>
           </div>
           
-          <div className={`text-xs font-bold px-2.5 py-1.5 rounded-md ${
+          {/* Badge Thống kê Bên Phải */}
+          <div className={`text-xs font-bold px-2.5 py-1.5 rounded-md shrink-0 ${
             selectedIds.size === 0 || (activeMode === "AMOUNT" && !isExactAmount)
               ? 'text-destructive bg-destructive/10'
               : 'text-blue-600 bg-blue-50'
@@ -460,77 +524,125 @@ export default function SplitRows({
           const isSelected = selectedIds.has(p.id);
           const shares = sharesMap[p.id] ?? (p.weight ?? 1);
           const amountVal = amountMap[p.id] ?? 0;
+          const isExpanded = expandedId === p.id;
 
           return (
             <div
               key={p.id}
-              className={`bg-white p-3 sm:p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                isSelected
-                  ? 'border-blue-300 ring-1 ring-blue-500/10 shadow-sm'
-                  : 'border-slate-200/80 shadow-sm opacity-50'
+              onClick={() => handleRowClick(p)}
+              className={`bg-white p-2 sm:p-3 rounded-2xl border transition-all flex items-center justify-between gap-2 sm:gap-3 cursor-pointer ${
+                isExpanded
+                  ? 'border-blue-400 ring-2 ring-blue-500/20 shadow-lg scale-[1.01]'
+                  : isSelected
+                    ? 'border-blue-300 ring-1 ring-blue-500/10 shadow-sm'
+                    : 'border-slate-200/80 shadow-sm opacity-50'
               }`}
             >
-              <div className="flex items-center gap-3 overflow-hidden">
+              <div className="flex items-center gap-2 sm:gap-3 overflow-hidden flex-1 min-w-0">
                 {/* Checkbox */}
                 <Checkbox
                   checked={isSelected}
                   onCheckedChange={(checked) => handleToggle(p.id, !!checked)}
-                  className="w-5 h-5 rounded border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-4 h-4 sm:w-5 sm:h-5 rounded-md border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 shrink-0"
                 />
 
                 {/* Avatar */}
-                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                  <User className="w-4 h-4 text-slate-500" />
+                <div className="hidden sm:flex w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-slate-100 items-center justify-center shrink-0">
+                  <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />
                 </div>
 
                 {/* Tên */}
-                <div className="text-sm font-bold text-slate-900 truncate">
-                  {p.name}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] sm:text-sm font-semibold text-slate-800 leading-tight line-clamp-2 break-words">
+                    {p.name}
+                  </p>
                 </div>
               </div>
 
               {/* Các ô nhập */}
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                {/* Ô Tỉ lệ */}
-                <div className="w-[4rem] sm:w-[4.5rem] relative">
-                  {isSelected && activeMode === "SHARES" ? (
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={shares === 0 ? "" : shares}
-                      onChange={(e) => handleSharesChange(p.id, e.target.value)}
-                      className="w-full h-9 rounded-xl text-center font-bold text-[13px] sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-1 shadow-inner"
-                      placeholder="0"
-                    />
+              {isExpanded ? (
+                <div
+                  className={`flex flex-col gap-1 shrink-0 ${activeMode === "SHARES" ? "items-center" : "items-end"}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="text-[10px] font-medium text-slate-400">
+                    {activeMode === "SHARES" ? t("splitShares") : t("amount")}
+                  </span>
+                  {activeMode === "SHARES" ? (
+                    <>
+                      <Input
+                        ref={(el) => { inputRefs.current[p.id] = el; }}
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={shares === 0 ? "" : shares}
+                        onChange={(e) => handleSharesChange(p.id, e.target.value)}
+                        onBlur={() => setExpandedId(null)}
+                        className="w-28 h-14 rounded-2xl text-center font-black !text-2xl text-blue-700 bg-blue-50 border-blue-300 focus-visible:ring-2 focus-visible:ring-blue-600 shadow-inner"
+                      />
+                      <span className="text-xs font-semibold text-slate-500">
+                        ≈ {amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}
+                      </span>
+                    </>
                   ) : (
-                    <div className={`w-full h-9 rounded-xl flex items-center justify-center font-bold text-[13px] sm:text-sm px-1 ${isSelected ? 'text-slate-400 bg-slate-50 border border-slate-200/50' : 'text-slate-400'}`}>
-                      {activeMode === "AMOUNT" ? "-" : (shares === 0 ? "-" : shares)}
-                    </div>
-                  )}
-                </div>
-
-                {/* Phân cách */}
-                <div className="text-slate-300 font-medium text-xs sm:text-sm px-0.5">x</div>
-
-                {/* Ô Số tiền */}
-                <div className="w-[5.5rem] sm:w-[6.5rem] relative">
-                  {isSelected && activeMode === "AMOUNT" ? (
                     <Input
+                      ref={(el) => { inputRefs.current[p.id] = el; }}
                       type="text"
                       inputMode="numeric"
                       value={amountVal === 0 ? "" : amountVal.toLocaleString()}
                       onChange={(e) => handleAmountChange(p.id, e.target.value)}
-                      className="w-full h-9 rounded-xl text-right font-bold text-[13px] sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-2 shadow-inner"
-                      placeholder="0"
+                      onBlur={() => setExpandedId(null)}
+                      className="w-36 h-14 rounded-2xl text-right font-black !text-2xl text-blue-700 bg-blue-50 border-blue-300 px-3 focus-visible:ring-2 focus-visible:ring-blue-600 shadow-inner"
                     />
-                  ) : (
-                    <div className={`w-full h-9 rounded-xl flex items-center justify-end font-bold text-[13px] sm:text-sm px-2 ${isSelected ? 'text-slate-400 bg-slate-50 border border-slate-200/50 truncate' : 'text-slate-400 truncate'}`}>
-                      {amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}
-                    </div>
                   )}
                 </div>
-              </div>
+              ) : (
+                <div
+                  className="flex items-center gap-1.5 sm:gap-2 shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Ô Tỉ lệ */}
+                  <div className="w-[4rem] sm:w-[4.5rem] relative">
+                    {isSelected && activeMode === "SHARES" ? (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={shares === 0 ? "" : shares}
+                        onChange={(e) => handleSharesChange(p.id, e.target.value)}
+                        className="w-full h-9 rounded-xl text-center font-bold text-[13px] sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-1 shadow-inner"
+                        placeholder="0"
+                      />
+                    ) : (
+                      <div className={`w-full h-9 rounded-xl flex items-center justify-center font-bold text-[13px] sm:text-sm px-1 ${isSelected ? 'text-slate-400 bg-slate-50 border border-slate-200/50' : 'text-slate-400'}`}>
+                        {activeMode === "AMOUNT" ? "-" : (shares === 0 ? "-" : shares)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Phân cách */}
+                  <div className="text-slate-300 font-medium text-xs sm:text-sm px-0.5">x</div>
+
+                  {/* Ô Số tiền */}
+                  <div className="w-[5.5rem] sm:w-[6.5rem] relative">
+                    {isSelected && activeMode === "AMOUNT" ? (
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={amountVal === 0 ? "" : amountVal.toLocaleString()}
+                        onChange={(e) => handleAmountChange(p.id, e.target.value)}
+                        className="w-full h-9 rounded-xl text-right font-bold text-[13px] sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-2 shadow-inner"
+                        placeholder="0"
+                      />
+                    ) : (
+                      <div className={`w-full h-9 rounded-xl flex items-center justify-end font-bold text-[13px] sm:text-sm px-2 ${isSelected ? 'text-slate-400 bg-slate-50 border border-slate-200/50 truncate' : 'text-slate-400 truncate'}`}>
+                        {amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

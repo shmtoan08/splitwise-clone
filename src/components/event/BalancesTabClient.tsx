@@ -16,7 +16,7 @@ type Props = {
 };
 
 export default function BalancesTabClient({ event }: Props) {
-  const { id: eventId, isAdvancedMode, participants, expenses } = event;
+  const { id: eventId, isAdvancedMode, participants, expenses, baseCurrency } = event;
   const t = useTranslations("budget");
   const { isCurrentParticipant } = useParticipantIdentity(participants);
   const [isPending, startTransition] = useTransition();
@@ -123,7 +123,7 @@ export default function BalancesTabClient({ event }: Props) {
                   </div>
                   <div className="text-right flex flex-col items-end justify-center">
                     <span className={`text-lg sm:text-xl font-extrabold tracking-tight ${balanceColor}`}>
-                      {balance > 0 ? "+" : ""}{formatCurrency(balance, { currency: "VND" })}
+                      {balance > 0 ? "+" : ""}{formatCurrency(balance, { currency: baseCurrency })}
                     </span>
                     <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase mt-0.5">{t("balanceLabel")}</span>
                   </div>
@@ -139,17 +139,17 @@ export default function BalancesTabClient({ event }: Props) {
                     }`}>
                       <span className={`font-medium ${isMe ? "text-emerald-700" : "text-slate-500"}`}>{t("budgetProvided")}</span>
                       <span className="font-bold text-slate-700">
-                        {typeof budgetDisplay === "number" ? formatCurrency(budgetDisplay, { currency: "VND" }) : budgetDisplay}
+                        {typeof budgetDisplay === "number" ? formatCurrency(budgetDisplay, { currency: baseCurrency }) : budgetDisplay}
                       </span>
                     </div>
                   )}
                   <div className="flex flex-col gap-1">
                     <span className={`font-medium ${isMe ? "text-emerald-700" : "text-slate-400"}`}>{t("paidAmount")}</span>
-                    <span className="font-bold text-slate-700">{formatCurrency(stats.paid, { currency: "VND" })}</span>
+                    <span className="font-bold text-slate-700">{formatCurrency(stats.paid, { currency: baseCurrency })}</span>
                   </div>
                   <div className="flex flex-col gap-1 text-right">
                     <span className={`font-medium ${isMe ? "text-emerald-700" : "text-slate-400"}`}>{t("owedAmount")}</span>
-                    <span className="font-bold text-slate-700">{formatCurrency(stats.owed, { currency: "VND" })}</span>
+                    <span className="font-bold text-slate-700">{formatCurrency(stats.owed, { currency: baseCurrency })}</span>
                   </div>
                 </div>
 
