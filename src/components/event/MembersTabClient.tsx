@@ -184,44 +184,58 @@ export default function MembersTabClient({ event, isCreator }: Props) {
       {/* Vùng nội dung cuộn */}
       <div className="flex-1 px-3 sm:px-6 py-4 overflow-y-auto pb-4 scrollbar-hide">
         
-        {/* Header Summary & Actions */}
-        <div className="flex flex-wrap gap-2 items-center justify-between mb-4 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm">
-          <div className="flex flex-col gap-1">
-            {isAdvancedMode && (
-              <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5">
-                <Wallet className="w-4 h-4 text-emerald-600" />
-                <span>{tBudget("totalBudget")}:</span>
-                <span className="font-bold text-slate-900">{formatCurrency(totalBudget, { currency: "VND" })}</span>
-              </div>
-            )}
-            <div className="text-xs text-slate-500 font-medium">
-              {t("memberCount", { count: realParticipants.length })}
+       {/* Header Actions Bar (Đã cân bằng lề trái & đổi màu Indigo) */}
+        {(isAdvancedMode || participants.length > 2) && (
+          <div className="flex items-center justify-between gap-2 mb-4 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm">
+            
+            {/* Vế Trái: Hiện Tổng ngân sách (Chế độ Nâng cao) HẶC Tiêu đề + Badge đếm nhóm (Chế độ Cơ bản) */}
+            <div className="flex items-center gap-2 min-w-0">
+              {isAdvancedMode ? (
+                <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 truncate">
+                  <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{tBudget("totalBudget")}:</span>
+                  <span className="font-bold text-slate-900">
+                    {formatCurrency(totalBudget, { currency: "VND" })}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-800">
+                  <Users className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>Thành viên & Nhóm</span>
+                  {groups.length > 0 && (
+                    <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                      {groups.length} nhóm
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Vế Phải: Cụm nút hành động */}
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              {participants.length > 2 && (
+                <Button
+                  onClick={handleCreateGroup}
+                  variant="outline"
+                  className="rounded-full bg-indigo-50/80 border-indigo-200/80 text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all text-xs h-8 px-3 font-semibold shadow-2xs"
+                >
+                  <Users className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
+                  <span>{tGroup("createGroup")}</span>
+                </Button>
+              )}
+
+              {isAdvancedMode && (
+                <Button
+                  onClick={openBudgetModal}
+                  variant="outline"
+                  className="rounded-full bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all text-xs h-8 px-3 font-semibold"
+                >
+                  {tBudget("manageBudget")}
+                </Button>
+              )}
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {participants.length > 2 && (
-              <Button
-                onClick={handleCreateGroup}
-                variant="outline"
-                className="rounded-full bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700 active:scale-95 transition-all text-xs h-8 px-3"
-              >
-                <Users className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-                <span>{tGroup("createGroup")}</span>
-              </Button>
-            )}
-
-            {isAdvancedMode && (
-              <Button
-                onClick={openBudgetModal}
-                variant="outline"
-                className="rounded-full bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all text-xs h-8 px-3 font-semibold"
-              >
-                {tBudget("manageBudget")}
-              </Button>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Members List */}
         {sortedParticipants.length === 0 ? (
@@ -350,7 +364,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                       </Dialog>
                     )}
 
-                    {isCreator && p.name !== "🏢 Quỹ Công ty" && (
+                    {isCreator && !isMe && p.name !== "🏢 Quỹ Công ty" && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -365,7 +379,9 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                             onConfirm: async () => {
                               const res = await deleteParticipant(eventId, p.id);
                               if (!res.success) {
-                                if (res.error === "HAS_EXPENSES") {
+                                if (res.error === "CANNOT_DELETE_CREATOR") {
+                                  showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: t("cannotDeleteCreator") || "Bạn không thể tự xóa bản thân vì bạn là chủ sự kiện này!" });
+                                } else if (res.error === "HAS_EXPENSES") {
                                   showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: t("memberHasExpenses") });
                                 } else {
                                   showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: tCommon("unauthorized") || "Không có quyền thực hiện." });

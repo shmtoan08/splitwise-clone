@@ -90,6 +90,19 @@ export async function deleteParticipant(eventId: string, participantId: string):
   }
 
   try {
+    const participant = await prisma.participant.findUnique({
+      where: { id: participantId },
+      select: { deviceToken: true },
+    });
+
+    if (!participant) {
+      return { success: false, error: "Thành viên không tồn tại" };
+    }
+
+    if (participant.deviceToken === event.creatorDeviceToken) {
+      return { success: false, error: "CANNOT_DELETE_CREATOR" };
+    }
+
     // Safety Check
     const expensesAsPayer = await prisma.expense.count({
       where: { payerId: participantId },

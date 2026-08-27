@@ -77,17 +77,23 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
     }
 
     // 3. Tính splits dựa trên finalAmount
-    let calculatedSplits: Array<{ participantId: string; amount: number }> = [];
+    let calculatedSplits: Array<{ participantId: string; amount: number; shares: number | null }> = [];
     let participantIds: string[] = [];
 
     if (splitConfig.mode === "AMOUNT") {
       calculatedSplits = splitConfig.splits.map((s) => ({
         participantId: s.participantId,
         amount: Math.round(s.amount * (snapshotRate || 1)),
+        shares: null,
       }));
       participantIds = splitConfig.splits.map((s) => s.participantId);
     } else if (splitConfig.mode === "SHARES") {
-      calculatedSplits = splitByShares(finalAmount, splitConfig.splits);
+      // Cast safely since we know shares must exist in SHARES mode
+      const rawResults = splitByShares(finalAmount, splitConfig.splits as { participantId: string; shares: number }[]);
+      calculatedSplits = rawResults.map((r) => ({
+        ...r,
+        shares: splitConfig.splits.find(s => s.participantId === r.participantId)?.shares ?? null,
+      }));
       participantIds = splitConfig.splits.map((s) => s.participantId);
     }
 
@@ -147,6 +153,7 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
           expenseId: expense.id,
           participantId: split.participantId,
           amount: split.amount,
+          shares: (split as any).shares ?? null,
         })),
       });
     });
@@ -207,16 +214,20 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
     }
 
     // 3. Tính splits
-    let calculatedSplits: Array<{ participantId: string; amount: number }> = [];
-
+    let calculatedSplits: Array<{ participantId: string; amount: number; shares: number | null }> = [];
     if (splitConfig.mode === "AMOUNT") {
       const rate = snapshotRate ? snapshotRate.toNumber() : (existingExpense.exchangeRate?.toNumber() ?? 1);
       calculatedSplits = splitConfig.splits.map((s) => ({
         participantId: s.participantId,
         amount: Math.round(s.amount * rate),
+        shares: null,
       }));
     } else if (splitConfig.mode === "SHARES") {
-      calculatedSplits = splitByShares(finalAmount, splitConfig.splits);
+      const rawResults = splitByShares(finalAmount, splitConfig.splits as { participantId: string; shares: number }[]);
+      calculatedSplits = rawResults.map((r) => ({
+        ...r,
+        shares: splitConfig.splits.find(s => s.participantId === r.participantId)?.shares ?? null,
+      }));
     }
 
     validateSplitSum(finalAmount, calculatedSplits);
@@ -266,6 +277,7 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
           expenseId: updatedExpense.id,
           participantId: split.participantId,
           amount: split.amount,
+          shares: (split as any).shares ?? null,
         })),
       });
     });

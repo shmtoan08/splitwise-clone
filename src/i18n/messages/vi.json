@@ -103,7 +103,17 @@
     "errorAmountRequired": "Số tiền phải lớn hơn 0",
     "amountPlaceholder": "Nhập số tiền",
     "expenseDate": "Ngày phát sinh",
-    "expenseNumber": "Khoản chi #{number}"
+    "expenseNumber": "Chi tiêu #{number}",
+    "confirmRecalcTitle": "Xác nhận tính lại",
+    "confirmRecalcMessage": "Thao tác này sẽ xóa các số liệu bạn đã tùy chỉnh. Bạn có chắc chắn muốn chia lại không?",
+    "restoreWeightBtn": "Khôi phục tỉ lệ",
+    "splitEvenlyBtn": "Chia bằng nhau",
+    "noParticipantSelected": "Vui lòng chọn ít nhất 1 thành viên",
+    "autoCalculated": "Tự động tính",
+    "cancelRecalc": "Giữ nguyên",
+    "proceedRecalc": "Chia lại",
+    "lockedByAmountHint": "Đang chia theo số tiền — bấm \"Khôi phục tỉ lệ\" để chỉnh lại tỉ lệ",
+    "lockedBySharesHint": "Đang chia theo tỉ lệ — bấm \"Chia bằng nhau\" để chỉnh trực tiếp số tiền"
   },
   "settlement": {
     "title": "Chốt sổ",
@@ -135,6 +145,11 @@
     "selectName": "Chọn tên của bạn (nếu đã được thêm):",
     "areYouNew": "Bạn là thành viên mới?",
     "join": "Tham gia",
+    "brandNewEventTitle": "Bạn tên là gì?",
+    "brandNewEventDesc": "Hãy nhập tên của bạn để bắt đầu",
+    "brandNewEventBtn": "Bắt đầu",
+    "skipBtnNew": "Hủy tạo nhóm",
+    "skipBtnExisting": "Bỏ qua / Tôi chỉ xem",
     "errorNameRequired": "Vui lòng nhập tên của bạn",
     "youLabel": "Bạn",
     "memberCount": "{count} thành viên",
@@ -146,7 +161,8 @@
     "deleteMemberTitle": "Xóa thành viên",
     "deleteMemberConfirm": "Bạn có chắc chắn muốn xóa thành viên này?",
     "deleteMemberSuccess": "Đã xóa thành viên.",
-    "memberHasExpenses": "Không thể xóa vì người này đang tham gia vào các khoản chi. Vui lòng gỡ họ ra khỏi các hóa đơn trước!"
+    "memberHasExpenses": "Không thể xóa vì người này đang tham gia vào các khoản chi. Vui lòng gỡ họ ra khỏi các hóa đơn trước!",
+    "cannotDeleteCreator": "Bạn không thể tự xóa bản thân vì bạn là chủ sự kiện này!"
   },
   "paymentInfo": {
     "dialogTitle": "Cài đặt thông tin nhận tiền",

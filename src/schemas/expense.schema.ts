@@ -4,9 +4,8 @@ import { z } from "zod";
 // Split mode schemas
 // ---------------------------------------------------------------------------
 
-/** Chia theo số tiền cụ thể (gộp từ Chia đều & Tùy chỉnh) */
-export const amountSplitSchema = z.object({
-  mode: z.literal("AMOUNT"),
+export const splitModeSchema = z.object({
+  mode: z.enum(["AMOUNT", "SHARES"]),
   splits: z
     .array(
       z.object({
@@ -15,30 +14,11 @@ export const amountSplitSchema = z.object({
           .number()
           .int("Số tiền phải là số nguyên")
           .min(0, "Số tiền không được âm"),
+        shares: z.number().nullable().optional(),
       })
     )
-    .min(1),
+    .min(1, "Vui lòng chọn ít nhất 1 thành viên"),
 });
-
-/** Chia theo tỷ lệ (shares) */
-export const sharesSplitSchema = z.object({
-  mode: z.literal("SHARES"),
-  splits: z
-    .array(
-      z.object({
-        participantId: z.string().cuid(),
-        shares: z
-          .number()
-          .positive("Số phần phải lớn hơn 0"),
-      })
-    )
-    .min(1),
-});
-
-export const splitModeSchema = z.discriminatedUnion("mode", [
-  amountSplitSchema,
-  sharesSplitSchema,
-]);
 
 // ---------------------------------------------------------------------------
 // Main expense schema
@@ -77,11 +57,8 @@ const expenseBaseSchema = z.object({
 
 export const addExpenseSchema = expenseBaseSchema.refine(
   (data) => {
-    if (data.splitConfig.mode === "AMOUNT") {
-      const sum = data.splitConfig.splits.reduce((acc, split) => acc + split.amount, 0);
-      return sum === data.amount;
-    }
-    return true;
+    const sum = data.splitConfig.splits.reduce((acc, split) => acc + split.amount, 0);
+    return sum === data.amount;
   },
   {
     message: "Tổng số tiền chia chi tiết không khớp với tổng khoản chi.",
@@ -99,11 +76,8 @@ export const updateExpenseSchema = expenseBaseSchema
   })
   .refine(
     (data) => {
-      if (data.splitConfig.mode === "AMOUNT") {
-        const sum = data.splitConfig.splits.reduce((acc, split) => acc + split.amount, 0);
-        return sum === data.amount;
-      }
-      return true;
+      const sum = data.splitConfig.splits.reduce((acc, split) => acc + split.amount, 0);
+      return sum === data.amount;
     },
     {
       message: "Tổng số tiền chia chi tiết không khớp với tổng khoản chi.",

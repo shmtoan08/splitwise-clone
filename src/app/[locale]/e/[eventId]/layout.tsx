@@ -40,8 +40,11 @@ export default async function EventLayout({ children, params }: Props) {
     titleSizeClass = "text-base sm:text-lg";
   }
 
+  // Đếm số thành viên thực tế (bỏ qua Quỹ công ty)
+  const realMemberCount = event.participants.filter(p => p.name !== "🏢 Quỹ Công ty").length;
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="h-dvh bg-slate-50 flex flex-col font-sans overflow-hidden">
       
       {/* 1. TOP HEADER: Chỉ chứa điều hướng và công cụ (Rất thoáng) */}
       <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-xl shadow-sm">
@@ -80,7 +83,7 @@ export default async function EventLayout({ children, params }: Props) {
       </header>
 
       {/* Container Chính */}
-      <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-0 sm:px-6 lg:px-8 bg-transparent sm:my-6 overflow-hidden relative">
+      <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-0 sm:px-6 lg:px-8 bg-transparent sm:my-6 min-h-0 overflow-hidden relative">
         <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden bg-white sm:shadow-md sm:rounded-3xl sm:border border-slate-200/60">
           
           {/* 2. SUB-HEADER: Tiêu đề nhóm được đưa xuống đây */}
@@ -89,7 +92,7 @@ export default async function EventLayout({ children, params }: Props) {
               {event.title}
             </h1>
             <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1.5">
-              {t("memberCount", { count: event.participants.length })}
+              {t("memberCount", { count: realMemberCount })}
             </p>
           </div>
 

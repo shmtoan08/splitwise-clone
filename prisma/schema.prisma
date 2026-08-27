@@ -150,6 +150,8 @@ model ExpenseSplit {
   participantId String
   /// Số tiền participant này phải chịu — đơn vị đồng (VND)
   amount        Int
+  /// Tỷ lệ chia (shares) — chỉ có giá trị khi splitMode = SHARES; null khi AMOUNT
+  shares        Float?
 
   expense     Expense     @relation(fields: [expenseId], references: [id], onDelete: Cascade)
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)

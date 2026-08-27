@@ -103,7 +103,17 @@
     "errorAmountRequired": "金額は0より大きい必要があります",
     "amountPlaceholder": "金額を入力",
     "expenseDate": "発生日",
-    "expenseNumber": "支出 #{number}"
+    "expenseNumber": "支出 #{number}",
+    "confirmRecalcTitle": "再計算の確認",
+    "confirmRecalcMessage": "この操作により、カスタマイズした数値がリセットされます。本当に再計算しますか？",
+    "restoreWeightBtn": "比率を復元",
+    "splitEvenlyBtn": "均等に分割",
+    "noParticipantSelected": "少なくとも1人のメンバーを選択してください",
+    "autoCalculated": "自動計算",
+    "cancelRecalc": "そのままにする",
+    "proceedRecalc": "分割し直す",
+    "lockedByAmountHint": "金額で分割中 — 比率を調整するには「比率を復元」をタップ",
+    "lockedBySharesHint": "比率で分割中 — 金額を直接入力するには「均等に分割」をタップ"
   },
   "settlement": {
     "title": "精算",
@@ -135,6 +145,11 @@
     "selectName": "あなたの名前を選択してください（追加済みの場合）：",
     "areYouNew": "新しいメンバーですか？",
     "join": "参加する",
+    "brandNewEventTitle": "あなたの名前は何ですか？",
+    "brandNewEventDesc": "始めるために名前を入力してください",
+    "brandNewEventBtn": "始める",
+    "skipBtnNew": "グループ作成をキャンセル",
+    "skipBtnExisting": "スキップ / 見るだけ",
     "errorNameRequired": "名前を入力してください",
     "youLabel": "あなた",
     "memberCount": "{count} メンバー",
@@ -146,7 +161,8 @@
     "deleteMemberTitle": "メンバーを削除",
     "deleteMemberConfirm": "このメンバーを削除してもよろしいですか？",
     "deleteMemberSuccess": "メンバーを削除しました。",
-    "memberHasExpenses": "このメンバーは支払いに参加しているため削除できません。まず支払いから外してください。"
+    "memberHasExpenses": "このメンバーは支払いに参加しているため削除できません。まず支払いから外してください。",
+    "cannotDeleteCreator": "あなたはこのイベントの管理者であるため、自分自身を削除できません！"
   },
   "paymentInfo": {
     "dialogTitle": "受取情報を設定",

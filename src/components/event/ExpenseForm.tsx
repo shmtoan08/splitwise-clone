@@ -17,12 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addExpense, updateExpense, deleteExpense } from "@/actions/expense";
-
-import CustomAmountSplit from "./split-modes/CustomAmountSplit";
-import SharesSplit from "./split-modes/SharesSplit";
-import { splitEvenly } from "@/utils/algorithm";
+import SplitRows from "./split-modes/SplitRows";
 import { AlertCircle } from "lucide-react";
 
 type Participant = {
@@ -42,7 +38,7 @@ type InitialExpense = {
   originalCurrency?: string | null;
   exchangeRate?: any;
   splitMode?: "AMOUNT" | "SHARES";
-  splits: { participantId: string; amount: number }[];
+  splits: { participantId: string; amount: number; shares?: number | null }[];
 };
 
 type Group = {
@@ -74,7 +70,8 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   const tCurrency = useTranslations("currency");
   
   const isEdit = !!initialExpense;
-  const initialMode = initialExpense?.splitMode || "AMOUNT";
+  // Spec: default mode = SHARES cho khoản chi mới; edit = theo splitMode đã lưu
+  const initialMode: SplitMode = initialExpense?.splitMode || "SHARES";
   
   const [title, setTitle] = useState(initialExpense?.title || t("expenseNumber", { number: (expensesCount || 0) + 1 }));
   const [amountStr, setAmountStr] = useState(initialExpense?.amount ? initialExpense.amount.toLocaleString('en-US') : "");
@@ -96,16 +93,17 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
     }
   }, [initialExpense, participants]);
 
-  const [splitMode, setSplitMode] = useState<SplitMode>(initialMode);
-  // Multi-currency
-  const [originalCurrency, setOriginalCurrency] = useState<string | undefined>(undefined);
-  const [manualRateStr, setManualRateStr] = useState("");
-  const [needsManualRate, setNeedsManualRate] = useState(false);
+  const [activeMode, setActiveMode] = useState<SplitMode>(initialMode);
   
-  const [amountSplits, setAmountSplits] = useState<{ participantId: string; amount: number }[]>(
-    initialExpense && initialExpense.splitMode === "AMOUNT" ? initialExpense.splits : []
+  // Multi-currency
+  const [originalCurrency, setOriginalCurrency] = useState<string | undefined>(initialExpense?.originalCurrency || undefined);
+  const [manualRateStr, setManualRateStr] = useState(initialExpense?.exchangeRate ? initialExpense.exchangeRate.toString() : "");
+  const [needsManualRate, setNeedsManualRate] = useState(false);
+
+  const [splits, setSplits] = useState<{ participantId: string; amount: number; shares?: number | null }[]>(
+    initialExpense?.splits ?? []
   );
-  const [sharesSplits, setSharesSplits] = useState<{ participantId: string; shares: number }[]>([]);
+
   const [isSplitValid, setIsSplitValid] = useState(true);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -142,12 +140,9 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
     setIsLoading(true);
     setError(null);
 
-    let splitConfig: any = { mode: splitMode };
-    if (splitMode === "AMOUNT") {
-      splitConfig.splits = amountSplits;
-    } else if (splitMode === "SHARES") {
-      splitConfig.splits = sharesSplits;
-    }
+    let splitConfig: any = { mode: activeMode };
+    // SplitRows đã trả về danh sách được lọc (checked) với đúng cấu trúc
+    splitConfig.splits = splits;
 
     const manualRate = manualRateStr ? parseFloat(manualRateStr.replace(/,/g, ".")) : undefined;
 
@@ -190,9 +185,8 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
       if (!isEdit) {
         setTitle("");
         setAmountStr("");
-        setSplitMode("AMOUNT");
-        setAmountSplits([]);
-        setSharesSplits([]);
+        setActiveMode("SHARES");
+        setSplits([]);
         setOriginalCurrency(undefined);
         setManualRateStr("");
         setNeedsManualRate(false);
@@ -328,35 +322,20 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
       {/* ── Removed Tiền tệ gốc block from here ── */}
 
       <div className="pt-2 pb-0 flex flex-col flex-1 min-h-0">
-        <Tabs value={splitMode} onValueChange={(v) => setSplitMode(v as SplitMode)} className="w-full flex flex-col flex-1 min-h-0">
-          <TabsList className="flex w-full bg-slate-100 p-1 rounded-full h-12">
-            <TabsTrigger value="AMOUNT" className="flex-1 rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:font-bold data-[state=active]:text-slate-900 text-slate-500 font-medium transition-all active:scale-95">{t("amount") || "Số tiền"}</TabsTrigger>
-            <TabsTrigger value="SHARES" className="flex-1 rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:font-bold data-[state=active]:text-slate-900 text-slate-500 font-medium transition-all active:scale-95">{t("splitShares")}</TabsTrigger>
-          </TabsList>
-          <div className="mt-4 flex-1 flex flex-col min-h-0">
-            <TabsContent value="AMOUNT" className="m-0 flex-1 flex flex-col min-h-0">
-              <CustomAmountSplit 
-                participants={participants} 
-                splits={amountSplits} 
-                onChange={setAmountSplits} 
-                totalAmount={amount}
-                currency={currency}
-                originalCurrency={originalCurrency}
-                groups={groups}
-                onValidityChange={setIsSplitValid}
-              />
-            </TabsContent>
-            <TabsContent value="SHARES" className="m-0 flex-1 flex flex-col min-h-0">
-              <SharesSplit 
-                participants={participants} 
-                splits={sharesSplits} 
-                onChange={setSharesSplits} 
-                totalAmount={amount}
-                currency={currency}
-              />
-            </TabsContent>
-          </div>
-        </Tabs>
+        <SplitRows 
+          participants={participants}
+          initialSplits={initialExpense?.splits}
+          initialMode={initialMode}
+          totalAmount={amount}
+          currency={currency}
+          originalCurrency={originalCurrency}
+          groups={groups}
+          onChange={(mode, newSplits) => {
+            setActiveMode(mode);
+            setSplits(newSplits);
+          }}
+          onValidityChange={setIsSplitValid}
+        />
       </div>
     </div>
   );
@@ -366,6 +345,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
       <Button onClick={() => onOpenChange(false)} variant="secondary" className="flex-1 h-12 rounded-full font-medium active:scale-95 transition-all shadow-sm text-base bg-slate-100 hover:bg-slate-200 text-slate-700 border-none">
         {tCommon("close") || "Đóng"}
       </Button>
+      {/* BUG3 FIX: disabled theo tab đang active */}
       <Button onClick={handleSubmit} disabled={isLoading || !isSplitValid} className={`${isEdit ? 'flex-[1.5]' : 'flex-1'} h-12 rounded-full font-medium active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-sm text-base`}>
         {isLoading ? tCommon("loading") : (isEdit ? t("update") : t("save"))}
       </Button>

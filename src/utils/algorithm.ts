@@ -59,11 +59,9 @@ export function splitEvenly(
   totalAmount: number,
   participantIds: string[]
 ): SplitResult[] {
-  if (participantIds.length === 0) {
-    throw new Error("splitEvenly: participantIds không được rỗng");
-  }
-  if (totalAmount <= 0) {
-    throw new Error("splitEvenly: totalAmount phải lớn hơn 0");
+  // Spec: trả về [] thay vì throw khi input rỗng hoặc không hợp lệ
+  if (participantIds.length === 0 || totalAmount <= 0) {
+    return [];
   }
 
   const n = participantIds.length;
@@ -113,42 +111,29 @@ export function splitByShares(
   totalAmount: number,
   participants: ShareInput[]
 ): SplitResult[] {
-  if (participants.length === 0) {
-    throw new Error("splitByShares: participants không được rỗng");
-  }
-  if (totalAmount <= 0) {
-    throw new Error("splitByShares: totalAmount phải lớn hơn 0");
-  }
-
   const totalShares = participants.reduce((sum, p) => sum + p.shares, 0);
-  if (totalShares <= 0) {
-    throw new Error("splitByShares: tổng shares phải lớn hơn 0");
+  // Spec: trả về array map amount=0 thay vì [] nếu rỗng hoặc totalShares <= 0 để giữ đúng length của input
+  if (participants.length === 0 || totalShares <= 0) {
+    return participants.map((p) => ({ participantId: p.participantId, amount: 0 }));
   }
 
-  // Tính amount cơ bản cho mỗi người theo shares
-  const baseAmounts = participants.map((p) => ({
-    participantId: p.participantId,
-    // Phần nguyên: floor để tránh ghi tiểu số
-    amount: Math.floor((totalAmount * p.shares) / totalShares),
-    // Lưu phần thập phân để sắp xếp ai nhận phần dư
-    fractional: (totalAmount * p.shares) / totalShares % 1,
-  }));
+  const raw = participants.map((i) => {
+    const exact = (totalAmount * i.shares) / totalShares;
+    const floor = Math.floor(exact);
+    return { participantId: i.participantId, floor, remainder: exact - floor };
+  });
 
-  const baseSum = baseAmounts.reduce((sum, p) => sum + p.amount, 0);
-  let remainder = totalAmount - baseSum;
+  const allocated = raw.reduce((s, r) => s + r.floor, 0);
+  const leftover = totalAmount - allocated;
 
-  // Sắp xếp theo phần thập phân giảm dần để phân bổ phần dư công bằng nhất
-  const sorted = [...baseAmounts].sort((a, b) => b.fractional - a.fractional);
+  const ranked = [...raw].sort(
+    (a, b) => b.remainder - a.remainder || a.participantId.localeCompare(b.participantId)
+  );
+  const bonusIds = new Set(ranked.slice(0, leftover).map((r) => r.participantId));
 
-  for (let i = 0; i < sorted.length && remainder > 0; i++) {
-    sorted[i].amount += 1;
-    remainder -= 1;
-  }
-
-  // Trả về theo thứ tự ban đầu của participants
-  const result = participants.map((p) => ({
-    participantId: p.participantId,
-    amount: sorted.find((s) => s.participantId === p.participantId)!.amount,
+  const result = raw.map((r) => ({
+    participantId: r.participantId,
+    amount: r.floor + (bonusIds.has(r.participantId) ? 1 : 0),
   }));
 
   validateSplitSum(totalAmount, result);

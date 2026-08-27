@@ -98,10 +98,12 @@ export async function getEventById(eventId: string) {
             originalCurrency: true,
             exchangeRate: true,
             isCrossSubsidy: true,
+            splitMode: true,
             splits: {
               select: {
                 participantId: true,
                 amount: true,
+                shares: true,
               }
             }
           }
