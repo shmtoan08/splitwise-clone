@@ -282,7 +282,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   };
 
   const content = (
-    <div className="px-4 sm:px-6 py-0 flex flex-col gap-5 flex-1 min-h-0">
+    <div className="px-4 sm:px-6 py-0 flex flex-col gap-5 flex-1 min-h-0 overflow-y-auto">
       {error && <p className="text-sm text-destructive font-medium p-3 bg-destructive/10 rounded-xl text-center">{error}</p>}
 
       <div className="flex flex-col items-center py-2 relative">
@@ -500,7 +500,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] w-[95vw] rounded-3xl p-0 overflow-hidden flex flex-col gap-0 max-h-[90vh]">
+      <DialogContent className="sm:max-w-[550px] w-[calc(100vw-32px)] sm:w-[95vw] rounded-3xl p-0 overflow-hidden flex flex-col gap-0 max-h-[calc(100dvh-32px)] sm:max-h-[90vh]">
         <DialogHeader className="px-6 pt-6 pb-0 shrink-0">
           <DialogTitle className="text-2xl font-normal text-slate-900 text-center">
             <input 

@@ -284,7 +284,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                             <Input
                               autoFocus
                               type="number"
-                              className="w-24 h-7 text-xs py-0 text-right bg-white rounded-lg border-emerald-400 focus-visible:ring-emerald-500"
+                              className="w-24 h-7 text-base sm:text-sm py-0 text-right bg-white rounded-lg border-emerald-400 focus-visible:ring-emerald-500"
                               value={inlineBudgetStr}
                               onChange={(e) => setInlineBudgetStr(e.target.value)}
                               onBlur={() => saveInlineEdit(p)}
@@ -425,7 +425,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAddMember()}
               placeholder={t("addMemberPlaceholder")}
-              className="flex-1 h-9 sm:h-10 border-0 shadow-none bg-transparent focus-visible:ring-0 text-xs sm:text-sm px-0 placeholder:text-slate-400 min-w-0"
+              className="flex-1 h-9 sm:h-10 border-0 shadow-none bg-transparent focus-visible:ring-0 text-base sm:text-sm px-0 placeholder:text-slate-400 min-w-0"
               disabled={isAdding}
             />
             
@@ -464,8 +464,29 @@ export default function MembersTabClient({ event, isCreator }: Props) {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="flex items-center gap-2">
-              <Input type="number" placeholder={tBudget("totalBudget")} value={totalInput} onChange={(e) => setTotalInput(e.target.value)} className="flex-1 rounded-xl h-10 border-slate-200 focus-visible:ring-emerald-500" />
+              <Input 
+                type="number" 
+                placeholder={tBudget("totalBudget")} 
+                value={totalInput} 
+                onChange={(e) => setTotalInput(e.target.value)} 
+                // Thêm text-base sm:text-sm vào cuối class
+                className="flex-1 rounded-xl h-10 border-slate-200 focus-visible:ring-emerald-500 text-base sm:text-sm" 
+              />
               <Button variant="outline" onClick={handleSplitEvenly} className="rounded-xl border-slate-200 hover:bg-slate-50 text-slate-700 h-10">{tBudget("splitEvenly")}</Button>
+            </div>
+            <div className="max-h-60 overflow-y-auto space-y-2 border-t border-slate-100 pt-3 mt-2">
+              {realParticipants.map(p => (
+                <div key={p.id} className="flex items-center justify-between gap-3 py-1">
+                  <span className="font-medium text-sm truncate flex-1 text-slate-800">{p.name}</span>
+                  <Input 
+                    type="number" 
+                    value={draftBudgets[p.id] || 0} 
+                    onChange={(e) => setDraftBudgets(prev => ({...prev, [p.id]: parseInt(e.target.value) || 0}))} 
+                    // Thêm text-base sm:text-sm vào cuối class
+                    className="w-32 text-right rounded-lg h-9 border-slate-200 focus-visible:ring-emerald-500 text-base sm:text-sm" 
+                  />
+                </div>
+              ))}
             </div>
             <div className="max-h-60 overflow-y-auto space-y-2 border-t border-slate-100 pt-3 mt-2">
               {realParticipants.map(p => (
