@@ -70,7 +70,8 @@
     "errorCopyLinkMessage": "Không thể sao chép liên kết.",
     "showQrCode": "Mã QR",
     "qrCodeTitle": "Quét mã QR để tham gia nhóm",
-    "memberCount": "{count} thành viên"
+    "memberCount": "{count} thành viên",
+    "metaDescription": "Tham gia nhóm để xem chi tiết các khoản chi và đối trừ nợ."
   },
   "expense": {
     "addExpense": "Thêm chi phí",

@@ -11,10 +11,45 @@ import AdvancedModeSwitch from "@/components/event/AdvancedModeSwitch";
 import { getTranslations } from "next-intl/server";
 import RecentEventTracker from "@/components/event/RecentEventTracker";
 
+import type { Metadata } from "next";
+
 type Props = {
   children: React.ReactNode;
   params: Promise<{ eventId: string; locale: string }>;
 };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { eventId, locale } = await params;
+  const event = await getEventById(eventId);
+  
+  if (!event) {
+    return {
+      title: "Group not found | Splitwise Clone",
+    };
+  }
+
+  const t = await getTranslations({ locale, namespace: "event" });
+  const title = event.title;
+  const description = t("metaDescription", { fallback: "Tham gia nhóm để xem chi tiết các khoản chi và đối trừ nợ." });
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      siteName: "Splitwise Clone",
+      images: ["/og-image.jpg"],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: ["/og-image.jpg"],
+    },
+  };
+}
 
 export default async function EventLayout({ children, params }: Props) {
   const { eventId } = await params;

@@ -70,7 +70,8 @@
     "errorCopyLinkMessage": "リンクをコピーできませんでした。",
     "showQrCode": "QRコード",
     "qrCodeTitle": "QRコードをスキャンして参加",
-    "memberCount": "{count} メンバー"
+    "memberCount": "{count} メンバー",
+    "metaDescription": "グループに参加して、支出の詳細と精算を確認しましょう。"
   },
   "expense": {
     "addExpense": "費用を追加",

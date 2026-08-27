@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/dialog";
 import { useAlert } from "@/providers/AlertProvider";
 
-
 type Props = {
   eventId: string;
 };
@@ -28,7 +27,6 @@ export default function ShareButton({ eventId }: Props) {
   const [isCopied, setIsCopied] = useState(false);
   const [canShare, setCanShare] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-
   const [isSharing, setIsSharing] = useState(false);
 
   useEffect(() => {
@@ -48,7 +46,6 @@ export default function ShareButton({ eventId }: Props) {
         setIsCopied(true);
         setTimeout(() => setIsCopied(false), 2000);
       } else {
-        // Fallback: hiển thị alert đẹp thay vì browser alert()
         showAlert({
           type: "info",
           title: t("copyLink"),
@@ -75,7 +72,6 @@ export default function ShareButton({ eventId }: Props) {
       });
       setIsOpen(false);
     } catch (err: any) {
-      // AbortError xảy ra khi user chủ động đóng Share Sheet (không chọn app nào)
       if (err.name !== "AbortError") {
         console.error("Share failed", err);
       }
@@ -88,52 +84,59 @@ export default function ShareButton({ eventId }: Props) {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger 
-        render={<Button variant="outline" className="rounded-full w-10 h-10 p-0 sm:w-auto sm:px-4 sm:h-10 active:scale-95 transition-all bg-slate-100 hover:bg-slate-200 border-none text-slate-700 shrink-0 shadow-sm" />}
+      {/* Khôi phục cú pháp render chuẩn của Base UI */}
+      <DialogTrigger
+        render={
+          <Button variant="outline" className="rounded-full w-10 h-10 p-0 sm:w-auto sm:px-4 sm:h-10 active:scale-95 transition-all bg-slate-100 hover:bg-slate-200 border-none text-slate-700 shrink-0 shadow-sm" />
+        }
       >
         <QrCode className="w-5 h-5 sm:mr-2" />
         <span className="hidden sm:inline font-semibold">{t("share")}</span>
       </DialogTrigger>
       
-      <DialogContent className="sm:max-w-md w-[95vw] rounded-3xl p-6 sm:p-8">
-        <DialogHeader>
-          <DialogTitle className="text-center text-2xl font-normal text-slate-900">{t("shareTitle")}</DialogTitle>
+      {/* Giữ nguyên các cải tiến chống ép chiều cao trên mobile */}
+      <DialogContent className="sm:max-w-md w-[calc(100vw-32px)] sm:w-[95vw] rounded-3xl p-0 gap-0 overflow-hidden flex flex-col max-h-[calc(100dvh-32px)] sm:max-h-[85vh]">
+        <DialogHeader className="px-6 pt-6 pb-0 shrink-0">
+          <DialogTitle className="text-center text-xl sm:text-2xl font-bold text-slate-900">
+            {t("shareTitle")}
+          </DialogTitle>
         </DialogHeader>
         
-        <div className="flex flex-col items-center justify-center space-y-6 py-2">
-          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col items-center justify-center space-y-5 px-6 pt-6 pb-4 flex-1 min-h-0 overflow-y-auto">
+          <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-sm shrink-0">
             <QRCodeSVG 
               value={url} 
-              size={220}
+              size={200}
               level="M"
               includeMargin={false}
             />
           </div>
-          <p className="text-sm font-medium text-muted-foreground text-center px-4">
+          
+          <p className="text-sm font-medium text-slate-500 text-center shrink-0">
             {t("qrCodeTitle")}
           </p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row w-full gap-3 px-6 pb-6 pt-4 border-t border-slate-100 bg-white shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] sm:rounded-b-3xl">
+          <Button 
+            variant="outline" 
+            className="w-full sm:flex-1 gap-2 rounded-full h-12 font-semibold active:scale-95 transition-all text-slate-700 border-slate-200 hover:bg-slate-50 shrink-0" 
+            onClick={handleCopy}
+          >
+            {isCopied ? <Check className="w-5 h-5 text-emerald-600" /> : <Copy className="w-5 h-5 text-slate-400" />}
+            {isCopied ? t("copied") : t("copyLink")}
+          </Button>
           
-          <div className="flex w-full gap-3 mt-4 flex-col sm:flex-row">
+          {canShare && (
             <Button 
-              variant="outline" 
-              className="flex-1 gap-2 rounded-full h-12 font-medium active:scale-95 transition-all text-slate-700 border-slate-300 hover:bg-slate-50" 
-              onClick={handleCopy}
+              className="w-full sm:flex-1 gap-2 rounded-full h-12 font-semibold active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-sm shrink-0"
+              onClick={handleNativeShare}
+              disabled={isSharing}
             >
-              {isCopied ? <Check className="w-5 h-5 text-emerald-600" /> : <Copy className="w-5 h-5 text-slate-400" />}
-              {isCopied ? t("copied") : t("copyLink")}
+              <Share className="w-5 h-5" />
+              {t("share")}
             </Button>
-            
-            {canShare && (
-              <Button 
-                className="flex-1 gap-2 rounded-full h-12 font-medium active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                onClick={handleNativeShare}
-                disabled={isSharing}
-              >
-                <Share className="w-4 h-4" />
-                {t("share")}
-              </Button>
-            )}
-          </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
