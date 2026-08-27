@@ -72,14 +72,23 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   
   const isEdit = !!initialExpense?.id;
   const initialMode: SplitMode = initialExpense?.splitMode || "SHARES";
-  
-  const [title, setTitle] = useState(initialExpense?.title || t("expenseNumber", { number: (expensesCount || 0) + 1 }));
+
+    // Tách riêng tiêu đề mặc định ra một biến để dễ so sánh
+  const defaultTitle = t("expenseNumber", { number: (expensesCount || 0) + 1 });
+
+  const [title, setTitle] = useState(initialExpense?.title || defaultTitle);
+
+  // Dùng useRef để ghi nhớ giá trị tiêu đề ngay trước khi người dùng chạm vào (Focus)
+  const prevTitleRef = useRef<string>(title);
+
+  //const [title, setTitle] = useState(initialExpense?.title || t("expenseNumber", { number: (expensesCount || 0) + 1 }));
   const [amountStr, setAmountStr] = useState(initialExpense?.amount ? (initialExpense.originalCurrency ? (initialExpense.amount / (initialExpense.exchangeRate?.toNumber() || 1)).toLocaleString('en-US') : initialExpense.amount.toLocaleString('en-US')) : "");
   
   const [receiptUrl, setReceiptUrl] = useState<string | null>(initialExpense?.receiptUrl || null);
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const receiptUrlToReplaceRef = useRef<string | null>(initialExpense?.receiptUrl || null);
   const receiptInputRef = useRef<HTMLInputElement | null>(null);
+
 
   const handleUploadReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -371,96 +380,100 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
           </Select>
         </div>
 
-        {/* Dòng 2: Ngày phát sinh (Trái) + Nút Upload/Thumbnail Hóa đơn (Phải) */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Ô Chọn ngày */}
-          <div className="w-[125px] sm:w-[145px] shrink-0">
+{/* Dòng 2: Ngày phát sinh (Trái - Khung ôm khít) + Nút Upload/Thumbnail Hóa đơn (Phải) */}
+        <div className="flex items-center justify-between w-full gap-3 mt-1">
+          
+          {/* TRÁI: Ô Chọn ngày (Khung xám ôm khít 135px vừa đẹp YYYY/MM/DD + Icon) */}
+          <div className="w-[135px] sm:w-[145px] shrink-0">
             <Input
               type="date"
               value={expenseDateStr}
               onChange={(e) => setExpenseDateStr(e.target.value)}
               disabled={isLoading}
-              className="h-11 min-h-0 max-h-11 leading-none py-0 w-full rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-blue-600 text-slate-700 text-xs sm:text-sm px-3 flex items-center appearance-none [&::-webkit-date-and-time-value]:min-h-0 [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:leading-none"
+              className="h-11 py-0 w-full rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-blue-600 text-slate-700 text-xs sm:text-sm px-3 flex items-center appearance-none [&::-webkit-date-and-time-value]:min-h-0 [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:leading-none"
             />
           </div>
 
-          {/* Nút Upload / Preview Thumbnail */}
-          {/* Input file dùng chung, ẩn, trigger bằng ref */}
-<input
-  ref={receiptInputRef}
-  type="file"
-  accept="image/*"
-  className="hidden"
-  onChange={handleUploadReceipt}
-  disabled={isLoading || isUploadingReceipt}
-/>
+          {/* Input file ẩn dùng chung */}
+          <input
+            ref={receiptInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleUploadReceipt}
+            disabled={isLoading || isUploadingReceipt}
+          />
 
-    {/* Nút Upload / Preview Thumbnail */}
-    <div className="shrink-0">
-      {receiptUrl ? (
-        <div className="flex items-center gap-1.5">
-          {/* Thumbnail preview — vẫn chạm để đổi, có icon xóa riêng ở góc */}
-          <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-blue-200 bg-slate-100 shrink-0">
-            <button
-              type="button"
-              onClick={() => receiptInputRef.current?.click()}
-              disabled={isLoading || isUploadingReceipt}
-              className="w-full h-full block disabled:opacity-60"
-              title={t("changeReceipt", { fallback: "Đổi ảnh khác" })}
-            >
-              <img src={getOptimizedImageUrl(receiptUrl)} alt="Receipt" className="w-full h-full object-cover" />
-              {isUploadingReceipt && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+          {/* Nút Upload / Preview Thumbnail Hóa đơn */}
+          <div className="shrink-0 flex items-center justify-end">
+            {receiptUrl ? (
+              <div className="flex items-center gap-2">
+                {/* 1. Icon Camera + Text nằm BÊN TRÁI */}
+                <button
+                  type="button"
+                  onClick={() => receiptInputRef.current?.click()}
+                  disabled={isLoading || isUploadingReceipt}
+                  className="h-11 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 text-xs font-semibold text-blue-600 transition-all active:scale-95 shrink-0 shadow-sm"
+                  title={t("changeReceipt", { fallback: "Đổi ảnh khác" })}
+                >
+                  {isUploadingReceipt ? (
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                  ) : (
+                    <Camera className="w-4 h-4 shrink-0" />
+                  )}
+                  {/* Hiển thị chữ 'Đổi ảnh' trên PC và 'Đổi' trên Mobile */}
+                  <span className="hidden sm:inline">Đổi ảnh</span>
+                  <span className="inline sm:hidden">Đổi</span>
+                </button>
+
+                {/* 2. Thumbnail Preview Ảnh nằm BÊN PHẢI */}
+                <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-blue-200 bg-slate-100 shrink-0 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => receiptInputRef.current?.click()}
+                    disabled={isLoading || isUploadingReceipt}
+                    className="w-full h-full block disabled:opacity-60"
+                    title={t("changeReceipt", { fallback: "Đổi ảnh khác" })}
+                  >
+                    <img src={getOptimizedImageUrl(receiptUrl)} alt="Receipt" className="w-full h-full object-cover" />
+                    {isUploadingReceipt && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <Loader2 className="w-4 h-4 text-white animate-spin" />
+                      </div>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReceiptUrl(null)}
+                    disabled={isLoading || isUploadingReceipt}
+                    className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 hover:bg-black/90 text-white flex items-center justify-center transition-colors"
+                    title={t("removeReceipt", { fallback: "Xóa ảnh" })}
+                  >
+                    <Trash2 className="w-2.5 h-2.5" />
+                  </button>
                 </div>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setReceiptUrl(null)}
-              disabled={isLoading || isUploadingReceipt}
-              className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
-              title={t("removeReceipt", { fallback: "Xóa ảnh" })}
-            >
-              <Trash2 className="w-2.5 h-2.5" />
-            </button>
+              </div>
+            ) : (
+              /* Trạng thái chưa chọn ảnh */
+              <button
+                type="button"
+                onClick={() => receiptInputRef.current?.click()}
+                disabled={isLoading || isUploadingReceipt}
+                className="h-11 px-3 sm:px-4 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 text-xs font-semibold text-slate-700 transition-all active:scale-95 shadow-sm"
+              >
+                {isUploadingReceipt ? (
+                  <Loader2 className="w-4 h-4 text-blue-600 shrink-0 animate-spin" />
+                ) : (
+                  <Camera className="w-4 h-4 text-blue-600 shrink-0" />
+                )}
+                <span className="hidden sm:inline">{t("attachReceipt", { fallback: "Đính kèm" })}</span>
+                <span className="inline sm:hidden">{t("attachReceipt", { fallback: "Thêm ảnh" })}</span>
+              </button>
+            )}
           </div>
 
-          {/* Icon camera riêng — tường minh, không cần đoán chạm vào ảnh */}
-          <button
-            type="button"
-            onClick={() => receiptInputRef.current?.click()}
-            disabled={isLoading || isUploadingReceipt}
-            className="w-11 h-11 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-blue-600 transition-all active:scale-95 shrink-0"
-            title={t("changeReceipt", { fallback: "Đổi ảnh khác" })}
-          >
-            {isUploadingReceipt ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Camera className="w-4 h-4" />
-            )}
-          </button>
         </div>
-      ) : (
-        /* Trạng thái chưa có ảnh — giữ nguyên như bản trước */
-        <button
-          type="button"
-          onClick={() => receiptInputRef.current?.click()}
-          disabled={isLoading || isUploadingReceipt}
-          className="h-11 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 text-xs font-semibold text-slate-700 transition-all active:scale-95"
-        >
-          {isUploadingReceipt ? (
-            <Loader2 className="w-4 h-4 text-blue-600 shrink-0 animate-spin" />
-          ) : (
-            <Camera className="w-4 h-4 text-blue-600 shrink-0" />
-          )}
-          <span className="hidden sm:inline">{t("attachReceipt", { fallback: "Đính kèm" })}</span>
-          <span className="inline sm:hidden">{t("attachReceipt", { fallback: "Thêm ảnh" })}</span>
-        </button>
-      )}
-    </div>
 
-        </div>
       </div>
 
       <div className="pt-2 pb-0">
@@ -501,15 +514,35 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[550px] w-[calc(100vw-32px)] sm:w-[95vw] rounded-3xl p-0 overflow-hidden flex flex-col gap-0 max-h-[calc(100dvh-32px)] sm:max-h-[90vh]">
-        <DialogHeader className="px-6 pt-6 pb-0 shrink-0">
-          <DialogTitle className="text-2xl font-normal text-slate-900 text-center">
-            <input 
-              type="text" 
+<DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+          <DialogTitle className="flex justify-center w-full">
+            <textarea
+              rows={title.length > 20 ? 2 : 1}
+              maxLength={60} 
               placeholder={t("titlePlaceholder")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              // 1. KHI CHẠM VÀO (FOCUS)
+              onFocus={() => {
+                prevTitleRef.current = title; // Lưu lại giá trị hiện tại
+                // Chỉ tự động xóa nếu đang tạo mới VÀ đang hiển thị đúng tiêu đề mặc định
+                if (!isEdit && title === defaultTitle) {
+                  setTitle("");
+                }
+              }}
+              // 2. KHI BỎ CHẠM (BLUR)
+              onBlur={() => {
+                // Nếu người dùng xóa trắng rồi click ra ngoài, khôi phục lại giá trị lúc nãy
+                if (title.trim() === "") {
+                  setTitle(prevTitleRef.current || defaultTitle);
+                }
+              }}
               disabled={isLoading}
-              className="w-full text-center bg-transparent border-none outline-none focus:ring-0 placeholder:text-slate-300 font-normal p-0"
+              className={`w-full text-center bg-transparent border-none outline-none focus:ring-0 placeholder:text-slate-300 font-bold p-0 resize-none overflow-hidden leading-tight transition-all duration-300 ${
+                title.length > 40 ? "text-lg sm:text-xl" :
+                title.length > 20 ? "text-xl sm:text-2xl" :
+                "text-2xl sm:text-3xl"
+              }`}
             />
           </DialogTitle>
         </DialogHeader>

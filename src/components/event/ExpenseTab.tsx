@@ -128,7 +128,7 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
                           className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex flex-col items-center justify-center text-blue-600 hover:bg-blue-100 hover:border-blue-200 active:scale-95 transition-all shadow-sm group"
                         >
                           <FileText className="w-4 h-4 mb-0.5 group-hover:scale-110 transition-transform" /> 
-                          <span className="text-[9px] font-black uppercase tracking-wider">{tExpense("receipt", { fallback: "Bill" })}</span>
+                          <span className="text-[6px] font-black uppercase tracking-wider">{tExpense("receipt", { fallback: "Bill" })}</span>
                         </button>
                       ) : (
                         <div className={`w-11 h-11 rounded-full flex items-center justify-center ${exp.isCrossSubsidy ? 'bg-emerald-100' : 'bg-slate-100'}`}>
