@@ -94,7 +94,7 @@ export default async function EventLayout({ children, params }: Props) {
             </Link>
           </div>
 
-          {/* CỤM PHẢI: Các nút công cụ giữ nguyên */}
+          {/* CỤM PHẢI: Các nút công cụ */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {isCreator && (
               <AdvancedModeSwitch eventId={event.id} isAdvancedMode={event.isAdvancedMode} />

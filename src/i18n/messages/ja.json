@@ -73,7 +73,12 @@
     "memberCount": "{count} メンバー",
     "metaDescription": "グループに参加して、支出の詳細と精算を確認しましょう。",
     "lockedBadge": "ロック中",
-    "eventLockedError": "イベントはロックされています。編集するには管理者がロックを解除する必要があります。"
+    "eventLockedError": "イベントはロックされています。編集するには管理者がロックを解除する必要があります。",
+    "deleteEventTitle": "グループを削除",
+    "deleteEventConfirmTitle": "このグループを削除してもよろしいですか？",
+    "deleteEventConfirmDesc": "メンバー、支出、レシート画像、精算履歴を含むすべてのデータが完全に削除され、復元できなくなります。",
+    "deleteEventSuccess": "グループを削除しました。",
+    "deleteEventButton": "完全に削除"
   },
   "expense": {
     "addExpense": "費用を追加",

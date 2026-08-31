@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import { User, Loader2, Search, SlidersHorizontal, X } from "lucide-react";
+import { User, Loader2, Search, SlidersHorizontal, X, Info } from "lucide-react";
 import ParticipantDetailsModal from "./ParticipantDetailsModal";
 import { useParticipantIdentity } from "@/hooks/useParticipantIdentity";
 import { applyCrossSubsidy } from "@/actions/budget";
@@ -27,9 +27,11 @@ type Props = {
 export default function BalancesTabClient({ event, isCreator }: Props) {
   const { id: eventId, isAdvancedMode, participants, expenses, baseCurrency } = event;
   const t = useTranslations("budget");
+  const tCommon = useTranslations("common");
   const { isCurrentParticipant, identity } = useParticipantIdentity(participants);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 
   // Tự động bật checkbox nếu trong DB đã tồn tại khoản chi bù đắp chéo
   const [autoApply, setAutoApply] = useState(() => expenses.some((ex: any) => ex.isCrossSubsidy));
@@ -304,17 +306,46 @@ export default function BalancesTabClient({ event, isCreator }: Props) {
       {/* --- NỘI DUNG CHÍNH --- */}
       <div className="flex-1 overflow-y-auto scrollbar-hide px-3 sm:px-6 py-4 pb-6 lg:pb-12 w-full max-w-5xl mx-auto space-y-3 sm:space-y-4">
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-2">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="flex-1 min-w-[160px]">
-              <h3 className="text-sm font-bold text-slate-800 mb-1">{t("balanceBoard")}</h3>
-              <p className="text-xs text-slate-500 font-medium">
-                {isAdvancedMode ? t("balanceDescAdvanced") : t("balanceDescNormal")}
-              </p>
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-2">
+          <div className="flex flex-col gap-2.5">
+            {/* Hàng 1: Tiêu đề "Bảng quyết toán" + Nút Info + Nút "Lưu & Áp dụng" */}
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h3 className="text-sm sm:text-base font-bold text-slate-800 shrink-0">{t("balanceBoard")}</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsInfoModalOpen(true)}
+                  className="text-slate-400 hover:text-blue-600 p-1 rounded-full hover:bg-slate-100 transition-colors shrink-0"
+                  title="Xem giải thích bảng quyết toán"
+                >
+                  <Info className="w-4 h-4 text-blue-500" />
+                </button>
+              </div>
+
+              {/* Nút Lưu & Áp dụng (Nằm cùng dòng với Bảng quyết toán) */}
+              {isAdvancedMode && isCreator && (
+                <Button
+                  onClick={handleApplyToDB}
+                  disabled={isPending || isLocked}
+                  className="h-8 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 shrink-0 shadow-xs"
+                >
+                  {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {autoApply
+                    ? t("saveCrossSubsidy", { fallback: "Lưu & Áp dụng" })
+                    : t("clearCrossSubsidy", { fallback: "Xóa Bù đắp" })}
+                </Button>
+              )}
             </div>
 
+            {/* Mô tả trên desktop */}
+            <p className="hidden sm:block text-xs text-slate-500 font-medium -mt-1">
+              {isAdvancedMode ? t("balanceDescAdvanced") : t("balanceDescNormal")}
+            </p>
+
+            {/* Hàng 2: 3 Thông tin chính (Checkbox bù đắp chéo, Tổng âm, Quỹ dư) */}
             {isAdvancedMode && (
-              <div className="flex flex-col items-end gap-1.5 shrink-0 pl-3 sm:border-l sm:border-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                {/* 1. Checkbox Bù đắp chéo */}
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="cross-subsidy"
@@ -325,45 +356,26 @@ export default function BalancesTabClient({ event, isCreator }: Props) {
                   />
                   <label
                     htmlFor="cross-subsidy"
-                    className={`text-xs font-semibold text-slate-700 select-none ${isCreator && !isLocked ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+                    className={`text-xs font-bold text-slate-700 select-none ${isCreator && !isLocked ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
                   >
                     {t("applyCheckboxLabel")}
                   </label>
                 </div>
-                <div className="flex flex-wrap items-center justify-end gap-1.5 mt-1">
-                  <span className="text-[11px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 whitespace-nowrap">
-                    {t("totalOverBudget", { fallback: "Tổng âm" })}: {formatCurrency(totalOverAvailable, { currency: baseCurrency })}
+
+                {/* 2 & 3. Tổng xài lố (Tổng âm) & Quỹ dư */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100 whitespace-nowrap">
+                    {t("totalOverBudget", { fallback: "Tổng âm" })}: <strong className="font-bold">{formatCurrency(totalOverAvailable, { currency: baseCurrency })}</strong>
                   </span>
-                  <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 whitespace-nowrap">
-                    {t("surplusFund", { fallback: "Quỹ dư" })}: {formatCurrency(totalSurplusAvailable, { currency: baseCurrency })}
+                  <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 whitespace-nowrap">
+                    {t("surplusFund", { fallback: "Quỹ dư" })}: <strong className="font-bold">{formatCurrency(totalSurplusAvailable, { currency: baseCurrency })}</strong>
                   </span>
                 </div>
               </div>
             )}
           </div>
 
-          {isAdvancedMode && (
-            <p className="text-[11px] text-slate-400 font-medium leading-tight mt-2">
-              {t("crossSubsidyDesc")}
-            </p>
-          )}
-
           {error && <p className="text-xs font-semibold text-rose-500 mt-2">{error}</p>}
-
-          {isAdvancedMode && (
-            <div className="mt-4 flex items-center justify-end border-t border-slate-100 pt-3">
-              <Button
-                onClick={handleApplyToDB}
-                disabled={isPending || isLocked}
-                className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
-              >
-                {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                {autoApply
-                  ? t("saveCrossSubsidy", { fallback: "Lưu & Áp dụng Bù đắp" })
-                  : t("clearCrossSubsidy", { fallback: "Xóa Bù đắp chéo" })}
-              </Button>
-            </div>
-          )}
         </div>
 
         {/* Danh sách Thẻ Quyết Toán */}
@@ -514,6 +526,43 @@ export default function BalancesTabClient({ event, isCreator }: Props) {
           />
         );
       })()}
+
+      {/* --- MODAL GIẢI THÍCH BẢNG QUYẾT TOÁN --- */}
+      <Dialog open={isInfoModalOpen} onOpenChange={setIsInfoModalOpen}>
+        <DialogContent className="w-[90vw] sm:max-w-md rounded-3xl p-5 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Info className="w-5 h-5 text-blue-600 shrink-0" />
+              <span>{t("balanceBoard")}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs sm:text-sm text-slate-600">
+            <p className="leading-relaxed">
+              {isAdvancedMode ? t("balanceDescAdvanced") : t("balanceDescNormal")}
+            </p>
+            {isAdvancedMode && (
+              <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1.5">
+                <p className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  {t("applyCheckboxLabel")}
+                </p>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {t("crossSubsidyDesc")}
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="pt-2">
+            <Button
+              onClick={() => setIsInfoModalOpen(false)}
+              variant="outline"
+              className="w-full rounded-full border-slate-200"
+            >
+              {tCommon("close") || "Đóng"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

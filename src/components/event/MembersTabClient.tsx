@@ -397,17 +397,17 @@ export default function MembersTabClient({ event, isCreator }: Props) {
       {/* Vùng nội dung cuộn */}
       <div className="flex-1 px-3 sm:px-6 py-4 overflow-y-auto pb-28 sm:pb-36 scrollbar-hide">
         
-       {/* Header Actions Bar (Đã cân bằng lề trái & đổi màu Indigo) */}
+        {/* Header Actions Bar (Đã cân bằng lề trái & đổi màu Indigo) */}
         {(isAdvancedMode || participants.length > 2) && (
-          <div className="flex items-center justify-between gap-2 mb-4 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-2 mb-4 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm">
             
-            {/* Vế Trái: Hiện Tổng ngân sách (Chế độ Nâng cao) HẶC Tiêu đề + Badge đếm nhóm (Chế độ Cơ bản) */}
+            {/* Vế Trái: Hiện Tổng ngân sách (Chế độ Nâng cao) HOẶC Tiêu đề + Badge đếm nhóm (Chế độ Cơ bản) */}
             <div className="flex items-center gap-2 min-w-0">
               {isAdvancedMode ? (
                 <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 truncate">
                   <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>{tBudget("totalBudget")}:</span>
-                  <span className="font-bold text-slate-900">
+                  <span className="font-bold text-slate-900 font-mono sm:font-sans">
                     {formatCurrency(totalBudget, { currency: baseCurrency })}
                   </span>
                 </div>
@@ -424,8 +424,8 @@ export default function MembersTabClient({ event, isCreator }: Props) {
               )}
             </div>
 
-            {/* Vế Phải: Cụm nút hành động */}
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
+            {/* Vế Phải: Cụm nút hành động (Trải đều/căn phải linh hoạt trên mobile) */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
               {participants.length > 2 && (
                 <Button
                   onClick={handleCreateGroup}
@@ -471,7 +471,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
               return (
                 <li
                   key={p.id}
-                  className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all ${
+                  className={`flex items-center gap-3 p-3 sm:p-3.5 rounded-2xl border transition-all ${
                     isMe 
                       ? "bg-emerald-50/60 border-emerald-300/80 shadow-sm ring-1 ring-emerald-500/10" 
                       : isJustAdded
@@ -479,58 +479,65 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                         : "bg-white border-slate-200/80 hover:border-slate-300"
                   }`}
                 >
-                  <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
+                  {/* Avatar */}
+                  <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
                     isMe 
                       ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-200' 
                       : 'bg-slate-100 text-slate-600'
                   }`}>
-                    {isMe ? <User size={20} /> : p.name.charAt(0).toUpperCase()}
+                    {isMe ? <User size={18} /> : p.name.charAt(0).toUpperCase()}
                   </div>
 
+                  {/* Thông tin chính */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {editingNameParticipantId === p.id ? (
-                          <Input
-                            autoFocus
-                            type="text"
-                            className="h-7 text-xs sm:text-sm py-0 bg-white rounded-lg border-indigo-400 focus-visible:ring-indigo-500 min-w-[120px] max-w-[180px]"
-                            value={inlineNameStr}
-                            onChange={(e) => setInlineNameStr(e.target.value)}
-                            onBlur={() => saveInlineNameEdit(p)}
-                            onKeyDown={(e) => e.key === "Enter" && saveInlineNameEdit(p)}
-                          />
-                        ) : (
-                          <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
-                            {p.name}
-                          </p>
-                        )}
-                        {isMe && (
-                          <Badge className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 border-emerald-200 shrink-0">
-                            {t("youLabel")}
-                          </Badge>
-                        )}
-                        {/* Nút Sửa tên */}
-                        {(isCreator || isMe) && p.name !== "🏢 Quỹ Công ty" && editingNameParticipantId !== p.id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="shrink-0 w-7 h-7 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 active:scale-95 transition-all -ml-0.5"
-                            title="Sửa tên"
-                            onClick={() => startInlineNameEdit(p)}
-                          >
-                            <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                          </Button>
-                        )}
-                      </div>
+                    {/* Hàng 1: Tên thành viên + Badge Bạn + Nút Sửa tên */}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {editingNameParticipantId === p.id ? (
+                        <Input
+                          autoFocus
+                          type="text"
+                          className="h-7 text-xs sm:text-sm py-0 bg-white rounded-lg border-indigo-400 focus-visible:ring-indigo-500 w-full max-w-[200px]"
+                          value={inlineNameStr}
+                          onChange={(e) => setInlineNameStr(e.target.value)}
+                          onBlur={() => saveInlineNameEdit(p)}
+                          onKeyDown={(e) => e.key === "Enter" && saveInlineNameEdit(p)}
+                        />
+                      ) : (
+                        <p className="font-bold text-slate-900 text-sm sm:text-base truncate" title={p.name}>
+                          {p.name}
+                        </p>
+                      )}
+                      
+                      {isMe && (
+                        <Badge className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-800 border-emerald-200 shrink-0">
+                          {t("youLabel")}
+                        </Badge>
+                      )}
 
+                      {/* Nút Sửa tên */}
+                      {(isCreator || isMe) && p.name !== "🏢 Quỹ Công ty" && editingNameParticipantId !== p.id && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 w-6 h-6 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 active:scale-95 transition-all p-0 -ml-0.5"
+                          title="Sửa tên"
+                          onClick={() => startInlineNameEdit(p)}
+                        >
+                          <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Hàng 2: Ngân sách + Nhóm + Thông tin ngân hàng */}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      {/* Tag Ngân sách cá nhân (Advanced Mode) */}
                       {isAdvancedMode && (
-                        <div className="shrink-0">
+                        <div className="inline-flex items-center">
                           {editingParticipantId === p.id ? (
                             <Input
                               autoFocus
                               type="number"
-                              className="w-24 h-7 text-base sm:text-sm py-0 text-right bg-white rounded-lg border-emerald-400 focus-visible:ring-emerald-500"
+                              className="w-24 h-6 text-xs py-0 text-right bg-white rounded-md border-emerald-400 focus-visible:ring-emerald-500"
                               value={inlineBudgetStr}
                               onChange={(e) => setInlineBudgetStr(e.target.value)}
                               onBlur={() => saveInlineEdit(p)}
@@ -538,42 +545,42 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                             />
                           ) : (
                             <span 
-                              className="text-xs sm:text-sm font-semibold text-emerald-700 bg-emerald-100/60 hover:bg-emerald-100 px-2.5 py-1 rounded-lg cursor-pointer transition-colors" 
+                              className="text-[11px] sm:text-xs font-semibold text-emerald-700 bg-emerald-100/70 hover:bg-emerald-200/80 px-2 py-0.5 rounded-md cursor-pointer transition-colors" 
                               onClick={() => startInlineEdit(p)}
+                              title="Bấm để sửa ngân sách"
                             >
-                              {formatCurrency(p.budget || 0, { currency: baseCurrency })}
+                              💰 {formatCurrency(p.budget || 0, { currency: baseCurrency })}
                             </span>
                           )}
                         </div>
                       )}
+
+                      {/* Tag Nhóm */}
+                      {pGroups.map((g, idx) => {
+                        const colorVariants = ["bg-slate-100 text-slate-700", "bg-indigo-50 text-indigo-700", "bg-amber-50 text-amber-700"];
+                        return (
+                          <Badge
+                            key={g.id}
+                            onClick={() => handleEditGroup(g)}
+                            className={`cursor-pointer transition-opacity border-transparent text-[10px] font-medium px-2 py-0.5 rounded-md ${colorVariants[idx % colorVariants.length]}`}
+                          >
+                            🏷️ {g.name}
+                          </Badge>
+                        );
+                      })}
+                      
+                      {/* Thông tin tài khoản ngân hàng */}
+                      {isMe && p.paymentInfo?.accountNumber && (
+                        <span className="text-[11px] text-emerald-800/90 font-medium flex items-center gap-1 bg-emerald-50/80 px-2 py-0.5 rounded-md border border-emerald-200/60 truncate max-w-full">
+                          <span>🏦</span> {p.paymentInfo.accountNumber} ({p.paymentInfo.accountName || p.paymentInfo.bankBIN})
+                        </span>
+                      )}
                     </div>
-                    
-                    {pGroups.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {pGroups.map((g, idx) => {
-                          const colorVariants = ["bg-slate-100 text-slate-700", "bg-indigo-50 text-indigo-700", "bg-amber-50 text-amber-700"];
-                          return (
-                            <Badge
-                              key={g.id}
-                              onClick={() => handleEditGroup(g)}
-                              className={`cursor-pointer transition-opacity border-transparent text-[10px] font-medium px-2 py-0.5 rounded-md ${colorVariants[idx % colorVariants.length]}`}
-                            >
-                              🏷️ {g.name} ({g.members.length})
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    )}
-                    
-                    {isMe && p.paymentInfo?.accountNumber && (
-                      <p className="text-[11px] text-emerald-800/80 truncate mt-1 font-medium flex items-center gap-1">
-                        <span>🏦</span> {p.paymentInfo.accountNumber} ({p.paymentInfo.accountName || p.paymentInfo.bankBIN})
-                      </p>
-                    )}
                   </div>
 
-                  <div className="shrink-0 flex items-center gap-1.5">
-
+                  {/* Cột các nút hành động bên phải */}
+                  <div className="shrink-0 flex items-center gap-1">
+                    {/* Nút Cấu hình gia đình */}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -584,15 +591,20 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                         }
                         setFamilyConfigParticipantId(p.id);
                       }}
-                      className={`h-9 rounded-full px-2.5 transition-all ${p.weight && p.weight > 1 ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'} ${isLocked ? "opacity-60" : ""}`}
+                      className={`h-8 sm:h-9 rounded-full px-2 sm:px-2.5 transition-all ${
+                        p.weight && p.weight > 1 
+                          ? 'bg-indigo-100/80 text-indigo-700 hover:bg-indigo-200 border border-indigo-200 shadow-2xs font-bold' 
+                          : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                      } ${isLocked ? "opacity-60" : ""}`}
                       title={t("familyConfigTitle")}
                     >
-                      <Users className="w-4 h-4" />
+                      <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       {p.weight && p.weight > 1 && (
-                        <span className="ml-1.5 text-xs font-bold">x{p.weight}</span>
+                        <span className="ml-1 text-[11px] sm:text-xs font-bold">x{p.weight}</span>
                       )}
                     </Button>
 
+                    {/* Nút Cài đặt tài khoản nhận tiền (cho bản thân) */}
                     {isMe && (
                       <Dialog open={openDialogId === p.id} onOpenChange={(open) => setOpenDialogId(open ? p.id : null)}>
                         <DialogTrigger
@@ -600,12 +612,12 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="shrink-0 w-9 h-9 rounded-full bg-white sm:bg-slate-100 hover:bg-emerald-100 hover:text-emerald-700 text-slate-500 active:scale-95 transition-all border border-slate-200/60"
+                              className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-100 hover:bg-emerald-100 hover:text-emerald-700 text-slate-500 active:scale-95 transition-all border border-slate-200/60"
                               title={t("setupPayment")}
                             />
                           }
                         >
-                          <Settings2 className="w-4 h-4" />
+                          <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           <span className="sr-only">{t("setupPayment")}</span>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-[400px] w-[95vw] rounded-3xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
@@ -622,11 +634,12 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                       </Dialog>
                     )}
 
+                    {/* Nút Xóa thành viên */}
                     {isCreator && !isMe && p.name !== "🏢 Quỹ Công ty" && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`shrink-0 w-9 h-9 rounded-full text-rose-500 hover:bg-rose-50 hover:text-rose-600 active:scale-95 transition-all ${isLocked ? "opacity-60" : ""}`}
+                        className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full text-rose-500 hover:bg-rose-50 hover:text-rose-600 active:scale-95 transition-all ${isLocked ? "opacity-60" : ""}`}
                         title={t("deleteMemberTitle")}
                         onClick={() => {
                           if (isLocked) {
@@ -655,7 +668,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                           });
                         }}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </Button>
                     )}
                   </div>

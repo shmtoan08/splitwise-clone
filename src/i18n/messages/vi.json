@@ -73,7 +73,12 @@
     "memberCount": "{count} thành viên",
     "metaDescription": "Tham gia nhóm để xem chi tiết các khoản chi và đối trừ nợ.",
     "lockedBadge": "Đã khóa",
-    "eventLockedError": "Sự kiện đã bị khóa. Chỉ người tạo nhóm mới có thể mở khóa để chỉnh sửa."
+    "eventLockedError": "Sự kiện đã bị khóa. Chỉ người tạo nhóm mới có thể mở khóa để chỉnh sửa.",
+    "deleteEventTitle": "Xóa sự kiện",
+    "deleteEventConfirmTitle": "Xác nhận xóa sự kiện này?",
+    "deleteEventConfirmDesc": "Toàn bộ dữ liệu thành viên, khoản chi tiêu, hình ảnh hóa đơn và lịch sử chốt sổ sẽ bị xóa vĩnh viễn và không thể khôi phục.",
+    "deleteEventSuccess": "Đã xóa sự kiện thành công.",
+    "deleteEventButton": "Xóa vĩnh viễn"
   },
   "expense": {
     "addExpense": "Thêm chi phí",

@@ -86,6 +86,17 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
 
   // Dùng useRef để ghi nhớ giá trị tiêu đề ngay trước khi người dùng chạm vào (Focus)
   const prevTitleRef = useRef<string>(title);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Focus vào vùng cuộn khi mở modal để trên mobile có thể cuộn ngay lập tức
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        scrollContainerRef.current?.focus({ preventScroll: true });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   //const [title, setTitle] = useState(initialExpense?.title || t("expenseNumber", { number: (expensesCount || 0) + 1 }));
   const [amountStr, setAmountStr] = useState(initialExpense?.amount ? (initialExpense.originalCurrency ? (initialExpense.amount / (initialExpense.exchangeRate?.toNumber() || 1)).toLocaleString('en-US') : initialExpense.amount.toLocaleString('en-US')) : "");
@@ -297,7 +308,11 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   };
 
   const content = (
-    <div className="px-4 sm:px-6 py-0 flex flex-col gap-5 flex-1 min-h-0 overflow-y-auto">
+    <div
+      ref={scrollContainerRef}
+      tabIndex={-1}
+      className="px-4 sm:px-6 py-0 flex flex-col gap-5 flex-1 min-h-0 overflow-y-auto overscroll-contain outline-none"
+    >
       {error && <p className="text-sm text-destructive font-medium p-3 bg-destructive/10 rounded-xl text-center">{error}</p>}
 
       <div className="flex flex-col items-center py-2 relative">

@@ -23,7 +23,8 @@ import {
   Lock,
   Unlock,
   Search,
-  X
+  X,
+  ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -47,6 +48,7 @@ export default function SettlementTabClient({ event, isCreator = false }: Props)
   const { identity } = useParticipantIdentity(participants);
   const currentParticipantId = identity?.participantId || null;
   const [searchQuery, setSearchQuery] = useState("");
+  const [isOverviewOpen, setIsOverviewOpen] = useState(true);
   const [claimerId, setClaimerId] = useState<string | undefined>(event.seikyuClaimerId || undefined);
   const [settlementMode, setSettlementMode] = useState<"AUTO" | "CLAIMER">(() => (event.seikyuClaimerId ? "CLAIMER" : "AUTO"));
   const [isPending, startTransition] = useTransition();
@@ -282,56 +284,84 @@ export default function SettlementTabClient({ event, isCreator = false }: Props)
 
       <div className="flex-1 overflow-y-auto scrollbar-hide px-3 sm:px-6 py-4 pb-8 sm:pb-12 lg:pb-16 w-full max-w-5xl mx-auto space-y-4">
         
-        {/* === 1. THỐNG KÊ TỔNG QUAN (NÂNG CẤP: DẢI VUỐT NGANG TIẾT KIỆM DIỆN TÍCH) === */}
-        <section>
-          <div className="flex items-center gap-2 mb-2 px-1">
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <h3 className="text-sm font-bold text-slate-800">
-              {t("overviewTitle", { fallback: "Tổng quan sự kiện" })}
-            </h3>
-          </div>
-          
-          {/* Dải scroll ngang */}
-          <div className="flex overflow-x-auto scrollbar-hide gap-3 pb-2 -mx-3 px-3 sm:mx-0 sm:px-0 snap-x">
-            <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col min-w-[140px] shrink-0 snap-start">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1">
-                <Receipt className="w-3.5 h-3.5" /> {t("totalSpent", { fallback: "Tổng chi tiêu" })}
-              </span>
-              <span className="text-lg font-extrabold text-slate-900">
-                {formatCurrency(stats.totalSpent, { currency: baseCurrency })}
-              </span>
+        {/* === 1. THỐNG KÊ TỔNG QUAN (THU GỌN / MỞ RỘNG) === */}
+        <section className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setIsOverviewOpen(!isOverviewOpen)}
+            className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-xl hover:bg-slate-200/60 active:scale-[0.99] transition-all text-left group cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+              <h3 className="text-sm font-bold text-slate-800 group-hover:text-slate-950">
+                {t("overviewTitle", { fallback: "Tổng quan sự kiện" })}
+              </h3>
             </div>
             
-            <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col min-w-[140px] shrink-0 snap-start">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1">
-                <Users className="w-3.5 h-3.5" /> {t("avgPerPerson", { fallback: "Trung bình/phần" })}
-              </span>
-              <span className="text-lg font-extrabold text-slate-900">
-                {formatCurrency(stats.avgSpent, { currency: baseCurrency })}
-              </span>
+            <div className="flex items-center gap-2">
+              {!isOverviewOpen && (
+                <span className="text-xs font-bold text-slate-700 bg-white border border-slate-200/80 px-2.5 py-0.5 rounded-full shadow-2xs">
+                  {formatCurrency(stats.totalSpent, { currency: baseCurrency })}
+                </span>
+              )}
+              <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-600 transition-colors">
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOverviewOpen ? "rotate-180" : ""}`} />
+              </div>
             </div>
+          </button>
+          
+          {/* Grid thống kê tổng quan (Thu gọn / Sổ ra) */}
+          {isOverviewOpen && (
+            <div className={`grid gap-2 sm:gap-3 ${isAdvancedMode ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2"} animate-in fade-in-50 slide-in-from-top-1 duration-200`}>
+              {/* Card 1: Tổng chi tiêu */}
+              <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1 truncate">
+                  <Receipt className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <span className="truncate">{t("totalSpent", { fallback: "Tổng chi tiêu" })}</span>
+                </span>
+                <span className="text-base sm:text-lg font-extrabold text-slate-900 font-mono sm:font-sans truncate">
+                  {formatCurrency(stats.totalSpent, { currency: baseCurrency })}
+                </span>
+              </div>
+              
+              {/* Card 2: Trung bình/người */}
+              <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1 truncate">
+                  <Users className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                  <span className="truncate">{t("avgPerPerson", { fallback: "Trung bình/phần" })}</span>
+                </span>
+                <span className="text-base sm:text-lg font-extrabold text-slate-900 font-mono sm:font-sans truncate">
+                  {formatCurrency(stats.avgSpent, { currency: baseCurrency })}
+                </span>
+              </div>
 
-            {isAdvancedMode && (
-              <>
-                <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-200/70 shadow-sm flex flex-col min-w-[140px] shrink-0 snap-start">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600/80 mb-1">
-                    <Wallet className="w-3.5 h-3.5" /> {t("totalBudget", { fallback: "Ngân sách" })}
-                  </span>
-                  <span className="text-lg font-extrabold text-emerald-700">
-                    {formatCurrency(stats.totalBudget, { currency: baseCurrency })}
-                  </span>
-                </div>
-                <div className="bg-blue-50/50 p-3 rounded-2xl border border-blue-200/70 shadow-sm flex flex-col min-w-[140px] shrink-0 snap-start">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-600/80 mb-1">
-                    <CreditCard className="w-3.5 h-3.5" /> {t("budgetUsed", { fallback: "Đã dùng quỹ" })}
-                  </span>
-                  <span className="text-lg font-extrabold text-blue-700">
-                    {formatCurrency(companyCoveredSum, { currency: baseCurrency })}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
+              {isAdvancedMode && (
+                <>
+                  {/* Card 3: Tổng ngân sách */}
+                  <div className="bg-emerald-50/60 p-3 sm:p-3.5 rounded-2xl border border-emerald-200/80 shadow-sm flex flex-col justify-between">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700/90 mb-1 truncate">
+                      <Wallet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span className="truncate">{t("totalBudget", { fallback: "Ngân sách" })}</span>
+                    </span>
+                    <span className="text-base sm:text-lg font-extrabold text-emerald-700 font-mono sm:font-sans truncate">
+                      {formatCurrency(stats.totalBudget, { currency: baseCurrency })}
+                    </span>
+                  </div>
+
+                  {/* Card 4: Ngân sách đã dùng */}
+                  <div className="bg-blue-50/60 p-3 sm:p-3.5 rounded-2xl border border-blue-200/80 shadow-sm flex flex-col justify-between">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-700/90 mb-1 truncate">
+                      <CreditCard className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span className="truncate">{t("budgetUsed", { fallback: "Đã dùng quỹ" })}</span>
+                    </span>
+                    <span className="text-base sm:text-lg font-extrabold text-blue-700 font-mono sm:font-sans truncate">
+                      {formatCurrency(companyCoveredSum, { currency: baseCurrency })}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </section>
 
         {/* === 2. CÀI ĐẶT NGƯỜI ĐẠI DIỆN (NÂNG CẤP: COMPACT INLINE) === */}

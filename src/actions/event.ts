@@ -8,6 +8,15 @@ import type { ActionResult } from "@/types";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
+import { v2 as cloudinary } from "cloudinary";
+import { deleteReceiptFromCloudinary } from "@/actions/expense";
+
+// Cấu hình Cloudinary SDK ở Server
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const DEVICE_TOKEN_COOKIE = "split-app-device-token";
 
@@ -575,5 +584,59 @@ export async function toggleEventLock(
   } catch (error) {
     console.error("[toggleEventLock] error:", error);
     return { success: false, error: "Lỗi hệ thống khi thay đổi trạng thái khóa." };
+  }
+}
+
+export async function deleteEvent(eventId: string): Promise<ActionResult> {
+  try {
+    const cookieStore = await cookies();
+    const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        creatorDeviceToken: true,
+        expenses: {
+          where: { receiptUrl: { not: null } },
+          select: { receiptUrl: true },
+        },
+      },
+    });
+
+    if (!event) {
+      return { success: false, error: "Sự kiện không tồn tại." };
+    }
+
+    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+      return { success: false, error: "unauthorized" };
+    }
+
+    // 1. Xóa tất cả ảnh hóa đơn của sự kiện trên Cloudinary
+    for (const exp of event.expenses) {
+      if (exp.receiptUrl) {
+        await deleteReceiptFromCloudinary(exp.receiptUrl);
+      }
+    }
+
+    // Dọn dẹp thư mục sự kiện trên Cloudinary (nếu có)
+    try {
+      if (process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+        await cloudinary.api.delete_resources_by_prefix(`split_app/events/${eventId}`);
+        await cloudinary.api.delete_folder(`split_app/events/${eventId}`);
+      }
+    } catch (cErr) {
+      console.warn("[deleteEvent] Cloudinary cleanup warning:", cErr);
+    }
+
+    // 2. Xóa Event trong Database (Tất cả bảng liên quan: Participant, PaymentInfo, Expense, ExpenseSplit, Settlement, Group, GroupMember sẽ tự động được xóa theo Cascade)
+    await prisma.event.delete({
+      where: { id: eventId },
+    });
+
+    revalidatePath("/");
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("[deleteEvent] error:", error);
+    return { success: false, error: "Lỗi hệ thống khi xóa sự kiện." };
   }
 }
