@@ -106,6 +106,7 @@ export async function getEventById(eventId: string) {
             title: true,
             amount: true,
             payerId: true,
+            createdById: true,
             createdAt: true,
             version: true,
             originalCurrency: true,

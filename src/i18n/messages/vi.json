@@ -95,6 +95,7 @@
     "delete": "Xoá",
     "deleteConfirmTitle": "Bạn có chắc chắn muốn xoá?",
     "deleteConfirmMessage": "Khoản chi này sẽ bị xoá vĩnh viễn và không thể khôi phục.",
+    "readOnlyNotice": "Chế độ chỉ xem (Chỉ người đăng hoặc người tạo nhóm mới có thể chỉnh sửa)",
     "unsupportedSplitMode": "Lưu ý: Số tiền chia đã được điền sẵn, tuy nhiên không nhận diện được cách chia theo tỷ lệ ban đầu. Bạn có thể tự chỉnh sửa lại nếu cần.",
     "addedBy": "Được thêm bởi",
     "selectAll": "Chọn tất cả",

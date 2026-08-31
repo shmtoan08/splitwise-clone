@@ -245,8 +245,8 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
   try {
     // 1. Lấy bản ghi expense cũ (để kiểm tra originalCurrency đã lưu và receiptUrl)
     const [eventRecord, existingExpense] = await Promise.all([
-      prisma.event.findUnique({ where: { id: eventId }, select: { baseCurrency: true, isLocked: true } }),
-      prisma.expense.findUnique({ where: { id }, select: { originalCurrency: true, exchangeRate: true, receiptUrl: true } }),
+      prisma.event.findUnique({ where: { id: eventId }, select: { baseCurrency: true, isLocked: true, creatorDeviceToken: true } }),
+      prisma.expense.findUnique({ where: { id }, select: { originalCurrency: true, exchangeRate: true, receiptUrl: true, createdById: true, payerId: true } }),
     ]);
 
     if (!eventRecord) return { success: false, error: "Sự kiện không tồn tại." };
@@ -311,7 +311,7 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
       return { success: false, error: "Một số thành viên không thuộc nhóm này." };
     }
 
-    // 5. Xác nhận danh tính
+    // 5. Xác nhận danh tính & quyền chỉnh sửa
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
     if (!deviceToken) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
@@ -320,7 +320,13 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
       where: { eventId, deviceToken },
       select: { id: true },
     });
-    if (!currentParticipant) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
+
+    const isCreator = !!(deviceToken && eventRecord.creatorDeviceToken === deviceToken);
+    const isAuthorOrPayer = currentParticipant && (existingExpense.createdById === currentParticipant.id || existingExpense.payerId === currentParticipant.id);
+
+    if (!isCreator && !isAuthorOrPayer) {
+      return { success: false, error: "Bạn không có quyền chỉnh sửa khoản chi này." };
+    }
 
     // 6. Update trong transaction (Optimistic Locking)
     await prisma.$transaction(async (tx) => {
@@ -379,8 +385,9 @@ export async function deleteExpense(expenseId: string, eventId: string): Promise
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
     if (!deviceToken) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
 
-    const [eventRecord, currentParticipant] = await Promise.all([
-      prisma.event.findUnique({ where: { id: eventId }, select: { isLocked: true } }),
+    const [eventRecord, existingExpense, currentParticipant] = await Promise.all([
+      prisma.event.findUnique({ where: { id: eventId }, select: { isLocked: true, creatorDeviceToken: true } }),
+      prisma.expense.findUnique({ where: { id: expenseId }, select: { receiptUrl: true, createdById: true, payerId: true } }),
       prisma.participant.findFirst({
         where: { eventId, deviceToken },
         select: { id: true },
@@ -389,7 +396,20 @@ export async function deleteExpense(expenseId: string, eventId: string): Promise
 
     if (!eventRecord) return { success: false, error: "Sự kiện không tồn tại." };
     if (eventRecord.isLocked) return { success: false, error: "Sự kiện đã bị khóa, không thể xóa chi tiêu." };
-    if (!currentParticipant) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
+    if (!existingExpense) return { success: false, error: "Khoản chi không tồn tại." };
+
+    const isCreator = !!(deviceToken && eventRecord.creatorDeviceToken === deviceToken);
+    const isAuthorOrPayer = currentParticipant && (existingExpense.createdById === currentParticipant.id || existingExpense.payerId === currentParticipant.id);
+
+    if (!isCreator && !isAuthorOrPayer) {
+      return { success: false, error: "Bạn không có quyền xóa khoản chi này." };
+    }
+
+    if (existingExpense.receiptUrl) {
+      deleteReceiptFromCloudinary(existingExpense.receiptUrl).catch((err) => {
+        console.error("Failed to delete receipt on expense delete:", err);
+      });
+    }
 
     await prisma.expense.delete({ where: { id: expenseId } });
 

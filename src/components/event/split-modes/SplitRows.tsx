@@ -76,6 +76,14 @@ export default function SplitRows({
     return new Set(participants.map(p => p.id));
   });
 
+  // Ở chế độ chỉ xem (isReadOnly): Ẩn hoàn toàn các thành viên không tham gia chia tiền
+  const displayedParticipants = useMemo(() => {
+    if (isReadOnly) {
+      return sortedParticipants.filter(p => selectedIds.has(p.id));
+    }
+    return sortedParticipants;
+  }, [isReadOnly, sortedParticipants, selectedIds]);
+
   const [sharesMap, setSharesMap] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {};
     for (const p of participants) {
@@ -401,8 +409,8 @@ export default function SplitRows({
         </div>
       )}
 
-      {/* Groups (Flex-Split) */}
-      {groups.length > 0 && (
+      {/* Groups (Flex-Split) - Ẩn khi ở chế độ chỉ xem */}
+      {groups.length > 0 && !isReadOnly && (
         <div className="flex flex-wrap gap-2 px-1 pt-1">
           {groups.map((g, idx) => {
             const colorVariants = ["bg-slate-100 text-slate-700", "bg-indigo-50 text-indigo-700", "bg-amber-50 text-amber-700"];
@@ -419,87 +427,141 @@ export default function SplitRows({
         </div>
       )}
 
-      {/* Hint & Header Buttons */}
+      {/* Hint & Header Buttons - Ẩn hướng dẫn và nút chỉnh sửa khi chỉ xem */}
       <div className="flex flex-col gap-2 px-1">
-        <div className="text-xs font-medium text-slate-500 bg-slate-100 px-3 py-2 rounded-lg leading-relaxed shadow-inner">
-          {activeMode === "AMOUNT" 
-            ? t("lockedByAmountHint", { fallback: "Đang chia theo số tiền — bấm Khôi phục tỉ lệ để chỉnh lại tỉ lệ" }) 
-            : t("lockedBySharesHint", { fallback: "Đang chia theo tỉ lệ — bấm Chia bằng nhau để chỉnh trực tiếp số tiền" })}
-        </div>
+        {!isReadOnly && (
+          <div className="text-xs font-medium text-slate-500 bg-slate-100 px-3 py-2 rounded-lg leading-relaxed shadow-inner">
+            {activeMode === "AMOUNT" 
+              ? t("lockedByAmountHint", { fallback: "Đang chia theo số tiền — bấm Khôi phục tỉ lệ để chỉnh lại tỉ lệ" }) 
+              : t("lockedBySharesHint", { fallback: "Đang chia theo tỉ lệ — bấm Chia bằng nhau để chỉnh trực tiếp số tiền" })}
+          </div>
+        )}
         
-        <div className="flex items-center justify-between gap-2 mt-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={handleToggleSelectAll}
-              disabled={isReadOnly}
-              className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
-                isAllSelected 
-                  ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
-                  : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
-              }`}
-              title={isAllSelected ? t("unselectAll", { fallback: "Bỏ chọn tất cả" }) : t("selectAll", { fallback: "Chọn tất cả" })}
-            >
-              {isAllSelected ? (
-                <CheckSquare className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              ) : (
-                <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              )}
-              <span className="hidden sm:inline">
-                {isAllSelected ? t("unselectAll", { fallback: "Bỏ chọn tất cả" }) : t("selectAll", { fallback: "Chọn tất cả" })}
-              </span>
-              <span className="inline sm:hidden">
-                {isAllSelected ? t("unselect", { fallback: "Bỏ chọn" }) : t("all", { fallback: "Tất cả" })}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleRestoreShares}
-              disabled={isReadOnly}
-              className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
-                activeMode === "SHARES" ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
-              }`}
-            >
-              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline">{t("restoreWeightBtn", { fallback: "Khôi phục tỉ lệ" })}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleEqualSplit}
-              disabled={isReadOnly}
-              className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
-                activeMode === "AMOUNT" ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
-              }`}
-            >
-              <Equal className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline">{t("splitEvenlyBtn", { fallback: "Chia bằng nhau" })}</span>
-            </button>
-          </div>
-          
-          <div className={`text-xs font-bold px-2.5 py-1.5 rounded-md shrink-0 ${
-            selectedIds.size === 0 || (activeMode === "AMOUNT" && !isExactAmount)
-              ? 'text-destructive bg-destructive/10'
-              : 'text-blue-600 bg-blue-50'
-          }`}>
-            {selectedIds.size === 0
-              ? t("noParticipantSelected", { fallback: "Vui lòng chọn" })
-              : activeMode === "AMOUNT" 
-                ? `${t("total", { fallback: "Tổng" })}: ${formatCurrency(currentTotalAmount, { currency: displayCurrency })} ${!isExactAmount && totalAmount > 0 ? `(${left > 0 ? '+' : ''}${formatCurrency(left, { currency: displayCurrency })})` : ''}`
+        {isReadOnly ? (
+          <div className="flex items-center justify-between gap-2 mt-1">
+            <span className="text-xs font-bold text-slate-600 tracking-tight">
+              {t("splitWith", { count: displayedParticipants.length, fallback: `Đã chia cho ${displayedParticipants.length} người` })}
+            </span>
+            <div className="text-xs font-bold px-2.5 py-1 rounded-md text-blue-600 bg-blue-50">
+              {activeMode === "AMOUNT" 
+                ? `${t("total", { fallback: "Tổng" })}: ${formatCurrency(currentTotalAmount, { currency: displayCurrency })}`
                 : `${currentTotalShares % 1 === 0 ? currentTotalShares : currentTotalShares.toFixed(2)} ${t("sharesCount", { fallback: "phần" })}`
-            }
+              }
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2 mt-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={handleToggleSelectAll}
+                className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
+                  isAllSelected 
+                    ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
+                    : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
+                }`}
+                title={isAllSelected ? t("unselectAll", { fallback: "Bỏ chọn tất cả" }) : t("selectAll", { fallback: "Chọn tất cả" })}
+              >
+                {isAllSelected ? (
+                  <CheckSquare className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                ) : (
+                  <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                )}
+                <span className="hidden sm:inline">
+                  {isAllSelected ? t("unselectAll", { fallback: "Bỏ chọn tất cả" }) : t("selectAll", { fallback: "Chọn tất cả" })}
+                </span>
+                <span className="inline sm:hidden">
+                  {isAllSelected ? t("unselect", { fallback: "Bỏ chọn" }) : t("all", { fallback: "Tất cả" })}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRestoreShares}
+                className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
+                  activeMode === "SHARES" ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
+                }`}
+              >
+                <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">{t("restoreWeightBtn", { fallback: "Khôi phục tỉ lệ" })}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleEqualSplit}
+                className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
+                  activeMode === "AMOUNT" ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
+                }`}
+              >
+                <Equal className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">{t("splitEvenlyBtn", { fallback: "Chia bằng nhau" })}</span>
+              </button>
+            </div>
+            
+            <div className={`text-xs font-bold px-2.5 py-1.5 rounded-md shrink-0 ${
+              selectedIds.size === 0 || (activeMode === "AMOUNT" && !isExactAmount)
+                ? 'text-destructive bg-destructive/10'
+                : 'text-blue-600 bg-blue-50'
+            }`}>
+              {selectedIds.size === 0
+                ? t("noParticipantSelected", { fallback: "Vui lòng chọn" })
+                : activeMode === "AMOUNT" 
+                  ? `${t("total", { fallback: "Tổng" })}: ${formatCurrency(currentTotalAmount, { currency: displayCurrency })} ${!isExactAmount && totalAmount > 0 ? `(${left > 0 ? '+' : ''}${formatCurrency(left, { currency: displayCurrency })})` : ''}`
+                  : `${currentTotalShares % 1 === 0 ? currentTotalShares : currentTotalShares.toFixed(2)} ${t("sharesCount", { fallback: "phần" })}`
+              }
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Danh sách participants */}
-      <div className="space-y-2.5 px-1 pb-4 pt-1">
-        {sortedParticipants.map((p) => {
+      <div className="space-y-2 px-1 pb-4 pt-1">
+        {displayedParticipants.map((p) => {
           const isSelected = selectedIds.has(p.id);
           const shares = sharesMap[p.id] ?? (p.weight ?? 1);
           const amountVal = amountMap[p.id] ?? 0;
 
+          // Giao diện khi ở chế độ Chỉ xem (isReadOnly)
+          if (isReadOnly) {
+            return (
+              <div
+                key={p.id}
+                className="bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-2 sm:gap-3"
+              >
+                <div className="flex items-center gap-2 sm:gap-3 overflow-hidden flex-1 min-w-0">
+                  {/* Avatar */}
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                    <User className="w-4 h-4 text-slate-500" />
+                  </div>
+
+                  {/* Tên */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] sm:text-sm font-semibold text-slate-800 leading-tight line-clamp-2 break-words">
+                      {p.name}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Phân bổ (Tỉ lệ & Số tiền) */}
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  {activeMode === "SHARES" && (
+                    <>
+                      <div className="h-8 sm:h-9 px-2 sm:px-2.5 rounded-xl flex items-center justify-center font-bold text-xs sm:text-sm text-slate-600 bg-slate-50 border border-slate-200/60">
+                        {shares} {t("sharesCount", { fallback: "phần" })}
+                      </div>
+                      <div className="text-slate-300 font-medium text-xs px-0.5">·</div>
+                    </>
+                  )}
+
+                  <div className="h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl flex items-center justify-end font-bold text-xs sm:text-sm text-blue-600 bg-blue-50/60 border border-blue-100">
+                    {amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // Giao diện khi ở chế độ Chỉnh sửa bình thường
           return (
             <div
               key={p.id}
@@ -514,7 +576,6 @@ export default function SplitRows({
                 {/* Checkbox */}
                 <Checkbox
                   checked={isSelected}
-                  disabled={isReadOnly}
                   onCheckedChange={(checked) => handleToggle(p.id, !!checked)}
                   onClick={(e) => e.stopPropagation()}
                   className="w-4 h-4 sm:w-5 sm:h-5 rounded-md border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 shrink-0"
@@ -547,8 +608,6 @@ export default function SplitRows({
                       min="0"
                       value={shares === 0 ? "" : shares}
                       onChange={(e) => handleSharesChange(p.id, e.target.value)}
-                      disabled={isReadOnly}
-                      // FIX iOS ZOOM: Thay text-[13px] bằng text-base sm:text-sm, đổi height thành h-10
                       className="w-full h-10 rounded-xl text-center font-bold text-base sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-1 shadow-inner"
                       placeholder="0"
                     />
@@ -570,8 +629,6 @@ export default function SplitRows({
                       inputMode="numeric"
                       value={amountVal === 0 ? "" : amountVal.toLocaleString()}
                       onChange={(e) => handleAmountChange(p.id, e.target.value)}
-                      disabled={isReadOnly}
-                      // FIX iOS ZOOM: Thay text-[13px] bằng text-base sm:text-sm, đổi height thành h-10
                       className="w-full h-10 rounded-xl text-right font-bold text-base sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-2 shadow-inner"
                       placeholder="0"
                     />

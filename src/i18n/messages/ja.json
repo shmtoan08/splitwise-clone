@@ -95,6 +95,7 @@
     "delete": "削除",
     "deleteConfirmTitle": "本当に削除しますか？",
     "deleteConfirmMessage": "この費用は完全に削除され、元に戻すことはできません。",
+    "readOnlyNotice": "閲覧専用モード（投稿者または管理者のみ編集可能です）",
     "unsupportedSplitMode": "注意：元の割合の割り勘設定を自動認識できませんでした。金額はそのままですが、必要に応じて手動で調整してください。",
     "addedBy": "追加した人",
     "selectAll": "すべて選択",

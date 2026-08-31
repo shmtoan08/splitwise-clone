@@ -34,6 +34,7 @@ type InitialExpense = {
   title: string;
   amount: number;
   payerId: string;
+  createdById?: string | null;
   version: number;
   expenseDate?: Date;
   originalCurrency?: string | null;
@@ -59,13 +60,15 @@ type Props = {
   groups?: Group[];
   expensesCount?: number;
   isReadOnly?: boolean;
+  isCreator?: boolean;
+  currentUserId?: string;
 };
 
 const POPULAR_CURRENCIES = ["VND", "JPY", "USD", "EUR", "SGD", "THB", "KRW"];
 
 type SplitMode = "AMOUNT" | "SHARES";
 
-export default function ExpenseForm({ eventId, participants, initialExpense, open, onOpenChange, currency, groups = [], expensesCount, isReadOnly = false }: Props) {
+export default function ExpenseForm({ eventId, participants, initialExpense, open, onOpenChange, currency, groups = [], expensesCount, isReadOnly = false, isCreator = false, currentUserId }: Props) {
   const t = useTranslations("expense");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -74,7 +77,18 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   const isEdit = !!initialExpense?.id;
   const initialMode: SplitMode = initialExpense?.splitMode || "SHARES";
 
-    // Tách riêng tiêu đề mặc định ra một biến để dễ so sánh
+  // Quyền chỉnh sửa: Tạo mới -> OK; Sửa -> Chỉ Creator hoặc Người tạo khoản chi / Người trả
+  const canEdit = useMemo(() => {
+    if (!isEdit) return true;
+    if (isReadOnly) return false;
+    if (isCreator) return true;
+    if (currentUserId && (initialExpense?.createdById === currentUserId || initialExpense?.payerId === currentUserId)) return true;
+    return false;
+  }, [isEdit, isReadOnly, isCreator, currentUserId, initialExpense]);
+
+  const effectiveReadOnly = isReadOnly || !canEdit;
+
+  // Tách riêng tiêu đề mặc định ra một biến để dễ so sánh
   const defaultTitle = t("expenseNumber", { number: (expensesCount || 0) + 1 });
 
   // Lọc ra các thành viên không phải là Quỹ công ty để không hiển thị trong list
@@ -324,11 +338,11 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
             value={amountStr} 
             onChange={(e) => handleAmountChange(e.target.value)} 
             className={`w-full text-center font-black h-20 sm:h-24 bg-transparent border-none shadow-none focus-visible:ring-0 text-blue-600 pl-4 pr-20 sm:pl-10 sm:pr-36 placeholder:text-slate-300 placeholder:font-semibold transition-all duration-200 ${getAmountFontSize()}`}
-            disabled={isReadOnly || isLoading}
+            disabled={effectiveReadOnly || isLoading}
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
             <Select
-              disabled={isReadOnly || isLoading}
+              disabled={effectiveReadOnly || isLoading}
               value={originalCurrency ?? currency}
               onValueChange={(val) => {
                 if (val === currency) {
@@ -370,7 +384,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
                 placeholder={tCurrency("manualRatePlaceholder")}
                 value={manualRateStr}
                 onChange={(e) => setManualRateStr(e.target.value)}
-                disabled={isReadOnly || isLoading}
+                disabled={effectiveReadOnly || isLoading}
                 className="h-9 rounded-lg text-sm bg-white border-amber-200 focus-visible:ring-amber-400"
               />
             </div>
@@ -382,7 +396,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
       <div className="flex flex-col gap-3">
         {/* Dòng 1: Người trả (Trọn 100% bề ngang) */}
         <div className="w-full">
-          <Select value={payerId} onValueChange={(val) => setPayerId(val || "")} disabled={isReadOnly || isLoading}>
+          <Select value={payerId} onValueChange={(val) => setPayerId(val || "")} disabled={effectiveReadOnly || isLoading}>
             <SelectTrigger className="w-full !h-11 rounded-xl bg-slate-50 border-slate-200 focus:ring-blue-600 font-medium text-xs sm:text-sm px-3 flex items-center justify-between">
               <SelectValue placeholder={t("paidBy")}>
                 <div className="flex items-center gap-1.5 min-w-0">
@@ -401,7 +415,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
           </Select>
         </div>
 
-{/* Dòng 2: Ngày phát sinh (Trái - Khung ôm khít) + Nút Upload/Thumbnail Hóa đơn (Phải) */}
+        {/* Dòng 2: Ngày phát sinh (Trái - Khung ôm khít) + Nút Upload/Thumbnail Hóa đơn (Phải) */}
         <div className="flex items-center justify-between w-full gap-3 mt-1">
           
           {/* TRÁI: Ô Chọn ngày (Khung xám ôm khít 135px vừa đẹp YYYY/MM/DD + Icon) */}
@@ -410,7 +424,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
               type="date"
               value={expenseDateStr}
               onChange={(e) => setExpenseDateStr(e.target.value)}
-              disabled={isReadOnly || isLoading}
+              disabled={effectiveReadOnly || isLoading}
               className="h-11 py-0 w-full rounded-xl bg-slate-50 border-slate-200 focus-visible:ring-blue-600 text-slate-700 text-xs sm:text-sm px-3 flex items-center appearance-none [&::-webkit-date-and-time-value]:min-h-0 [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:leading-none"
             />
           </div>
@@ -422,7 +436,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
             accept="image/*"
             className="hidden"
             onChange={handleUploadReceipt}
-            disabled={isReadOnly || isLoading || isUploadingReceipt}
+            disabled={effectiveReadOnly || isLoading || isUploadingReceipt}
           />
 
           {/* Nút Upload / Preview Thumbnail Hóa đơn */}
@@ -430,7 +444,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
             {receiptUrl ? (
               <div className="flex items-center gap-2">
                 {/* 1. Icon Camera + Text nằm BÊN TRÁI */}
-                {!isReadOnly && (
+                {!effectiveReadOnly && (
                   <button
                     type="button"
                     onClick={() => receiptInputRef.current?.click()}
@@ -450,7 +464,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
 
                 {/* 2. Thumbnail Preview Ảnh nằm BÊN PHẢI */}
                 <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-blue-200 bg-slate-100 shrink-0 shadow-sm">
-                  {isReadOnly ? (
+                  {effectiveReadOnly ? (
                     <a href={getOptimizedImageUrl(receiptUrl)} target="_blank" rel="noopener noreferrer" className="w-full h-full block">
                       <img src={getOptimizedImageUrl(receiptUrl)} alt="Receipt" className="w-full h-full object-cover" />
                     </a>
@@ -470,7 +484,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
                       )}
                     </button>
                   )}
-                  {!isReadOnly && (
+                  {!effectiveReadOnly && (
                     <button
                       type="button"
                       onClick={() => setReceiptUrl(null)}
@@ -485,7 +499,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
               </div>
             ) : (
               /* Trạng thái chưa chọn ảnh */
-              !isReadOnly && (
+              !effectiveReadOnly && (
                 <button
                   type="button"
                   onClick={() => receiptInputRef.current?.click()}
@@ -517,7 +531,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
           currency={currency}
           originalCurrency={originalCurrency}
           groups={groups}
-          isReadOnly={isReadOnly}
+          isReadOnly={effectiveReadOnly}
           onChange={(mode, newSplits) => {
             setActiveMode(mode);
             setSplits(newSplits);
@@ -528,18 +542,30 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
     </div>
   );
 
-  const stickyFooter = isReadOnly ? null : (
+  const stickyFooter = (
     <div className="flex flex-row gap-2 sm:gap-3 px-4 pb-4 pt-2 sm:px-6 sm:pb-6 sm:pt-2 border-t border-slate-100 bg-white shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] sm:rounded-b-3xl">
-      <Button onClick={() => onOpenChange(false)} variant="secondary" className="flex-1 h-12 rounded-full font-medium active:scale-95 transition-all shadow-sm text-base bg-slate-100 hover:bg-slate-200 text-slate-700 border-none">
-        {tCommon("close") || "Đóng"}
-      </Button>
-      <Button onClick={handleSubmit} disabled={isLoading || !isSplitValid || isUploadingReceipt} className={`${isEdit ? 'flex-[1.5]' : 'flex-1'} h-12 rounded-full font-medium active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-sm text-base`}>
-        {isLoading || isUploadingReceipt ? tCommon("loading") : (isEdit ? t("update") : t("save"))}
-      </Button>
-      {isEdit && (
-        <Button onClick={handleDelete} disabled={isLoading} variant="destructive" className="flex-1 h-12 rounded-full font-medium active:scale-95 transition-all shadow-sm text-base bg-red-50 hover:bg-red-100 text-red-600 border-none">
-          {t("delete")}
+      {effectiveReadOnly ? (
+        <Button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          className="w-full h-12 rounded-full font-medium active:scale-95 transition-all shadow-sm text-base bg-slate-100 hover:bg-slate-200 text-slate-700 border-none"
+        >
+          {tCommon("close") || "Đóng"}
         </Button>
+      ) : (
+        <>
+          <Button onClick={() => onOpenChange(false)} variant="secondary" className="flex-1 h-12 rounded-full font-medium active:scale-95 transition-all shadow-sm text-base bg-slate-100 hover:bg-slate-200 text-slate-700 border-none">
+            {tCommon("close") || "Đóng"}
+          </Button>
+          <Button onClick={handleSubmit} disabled={isLoading || !isSplitValid || isUploadingReceipt} className={`${isEdit ? 'flex-[1.5]' : 'flex-1'} h-12 rounded-full font-medium active:scale-95 transition-all bg-blue-600 hover:bg-blue-700 text-white shadow-sm text-base`}>
+            {isLoading || isUploadingReceipt ? tCommon("loading") : (isEdit ? t("update") : t("save"))}
+          </Button>
+          {isEdit && (
+            <Button onClick={handleDelete} disabled={isLoading} variant="destructive" className="flex-1 h-12 rounded-full font-medium active:scale-95 transition-all shadow-sm text-base bg-red-50 hover:bg-red-100 text-red-600 border-none">
+              {t("delete")}
+            </Button>
+          )}
+        </>
       )}
     </div>
   );
@@ -548,9 +574,9 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[550px] w-[calc(100vw-32px)] sm:w-[95vw] rounded-3xl p-0 overflow-hidden flex flex-col gap-0 max-h-[calc(100dvh-32px)] sm:max-h-[90vh]">
         <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
-          {isReadOnly && (
-            <div className="text-center bg-slate-100 text-slate-500 text-xs py-1.5 rounded-md mb-3 font-medium">
-              Chế độ chỉ xem (Bạn không có quyền sửa khoản chi này)
+          {effectiveReadOnly && (
+            <div className="text-center bg-slate-100 text-slate-600 text-xs py-1.5 px-3 rounded-xl mb-3 font-medium">
+              {t("readOnlyNotice", { fallback: "Chế độ chỉ xem (Chỉ người đăng hoặc người tạo nhóm mới có thể chỉnh sửa)" })}
             </div>
           )}
           <DialogTitle className="flex justify-center w-full">
@@ -575,7 +601,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
                   setTitle(prevTitleRef.current || defaultTitle);
                 }
               }}
-              disabled={isReadOnly || isLoading}
+              disabled={effectiveReadOnly || isLoading}
               className={`w-full text-center bg-transparent border-none outline-none focus:ring-0 placeholder:text-slate-300 font-bold p-0 resize-none overflow-hidden leading-tight transition-all duration-300 ${
                 title.length > 40 ? "text-lg sm:text-xl" :
                 title.length > 20 ? "text-xl sm:text-2xl" :

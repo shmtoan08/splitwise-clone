@@ -37,6 +37,7 @@ type Expense = {
   title: string;
   amount: number;
   payerId: string;
+  createdById?: string | null;
   version: number;
   createdAt: Date;
   expenseDate?: Date;
@@ -62,15 +63,23 @@ type Props = {
   groups?: Group[];
   isLocked?: boolean;
   currentParticipantId?: string;
+  isCreator?: boolean;
 };
 
-export default function ExpenseTab({ eventId, participants, expenses, currency, groups = [], isLocked = false, currentParticipantId }: Props) {
+export default function ExpenseTab({ eventId, participants, expenses, currency, groups = [], isLocked = false, currentParticipantId, isCreator = false }: Props) {
   const t = useTranslations("event");
   const tExpense = useTranslations("expense");
   const tCommon = useTranslations("common");
   const { showAlert } = useAlert();
   const { identity } = useParticipantIdentity(participants as any);
   const effectiveUserId = currentParticipantId || identity?.participantId;
+
+  const checkCanEdit = (exp?: Expense) => {
+    if (!exp || !exp.id) return true; // tạo mới hoặc clone
+    if (isCreator) return true;
+    if (effectiveUserId && (exp.createdById === effectiveUserId || exp.payerId === effectiveUserId)) return true;
+    return false;
+  };
 
   const [selectedExpense, setSelectedExpense] = useState<Expense | undefined>(undefined);
   const [formOpen, setFormOpen] = useState(false);
@@ -453,21 +462,23 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
                             <span className="text-[11px] font-semibold">{tExpense("clone", { fallback: "Nhân bản" })}</span>
                           </button>
                           
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteClick(e, exp)}
-                            disabled={isDeletingId === exp.id}
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full border border-red-100 bg-red-50 hover:bg-red-100 active:scale-95 transition-all text-red-500 shadow-sm disabled:opacity-50 group ${
-                              isLocked ? "opacity-50" : ""
-                            }`}
-                          >
-                            {isDeletingId === exp.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                            )}
-                            <span className="text-[11px] font-semibold">{tCommon("delete", { fallback: "Xóa" })}</span>
-                          </button>
+                          {checkCanEdit(exp) && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteClick(e, exp)}
+                              disabled={isDeletingId === exp.id}
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded-full border border-red-100 bg-red-50 hover:bg-red-100 active:scale-95 transition-all text-red-500 shadow-sm disabled:opacity-50 group ${
+                                isLocked ? "opacity-50" : ""
+                              }`}
+                            >
+                              {isDeletingId === exp.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                              )}
+                              <span className="text-[11px] font-semibold">{tCommon("delete", { fallback: "Xóa" })}</span>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -533,6 +544,9 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
           currency={currency}
           groups={groups}
           expensesCount={expenses.length}
+          isReadOnly={!checkCanEdit(selectedExpense)}
+          isCreator={isCreator}
+          currentUserId={effectiveUserId}
         />
       )}
 
