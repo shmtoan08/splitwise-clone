@@ -26,6 +26,14 @@ export async function createGroup(data: unknown) {
   try {
     const { eventId, name, participantIds } = parsed.data;
 
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
+    });
+    if (event?.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
+    }
+
     await prisma.$transaction(async (tx) => {
       const group = await tx.group.create({
         data: {
@@ -61,6 +69,14 @@ export async function updateGroup(data: unknown) {
   try {
     const { groupId, eventId, name, participantIds } = parsed.data;
 
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
+    });
+    if (event?.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
+    }
+
     await prisma.$transaction(async (tx) => {
       // Đổi tên
       await tx.group.update({
@@ -94,6 +110,14 @@ export async function updateGroup(data: unknown) {
 
 export async function deleteGroup(groupId: string, eventId: string) {
   try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
+    });
+    if (event?.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
+    }
+
     await prisma.group.delete({
       where: { id: groupId },
     });

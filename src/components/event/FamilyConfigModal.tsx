@@ -112,7 +112,7 @@ export default function FamilyConfigModal({ eventId, participant, open, onOpenCh
           <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
             <div className="flex flex-col">
               <span className="font-bold text-slate-900 text-sm">{t("adults")}</span>
-              <span className="text-[11px] text-slate-400 font-medium mt-0.5">Hệ số 1.0 / người</span>
+              <span className="text-[11px] text-slate-400 font-medium mt-0.5">{t("adultWeightDesc")}</span>
             </div>
             
             {/* Bộ tăng giảm (Stepper) dạng viên thuốc */}
@@ -144,7 +144,7 @@ export default function FamilyConfigModal({ eventId, participant, open, onOpenCh
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
                 <span className="font-bold text-slate-900 text-sm">{t("children")}</span>
-                <span className="text-[11px] text-slate-400 font-medium mt-0.5">Tùy chỉnh suất ăn (0.1 - 1.0)</span>
+                <span className="text-[11px] text-slate-400 font-medium mt-0.5">{t("childWeightDesc")}</span>
               </div>
               <Button 
                 variant="outline" 
@@ -160,14 +160,14 @@ export default function FamilyConfigModal({ eventId, participant, open, onOpenCh
             
             {children.length === 0 ? (
               <div className="text-xs text-slate-400 font-medium text-center py-4 bg-slate-50/80 rounded-xl border border-dashed border-slate-200">
-                Chưa có trẻ em đi kèm
+                {t("noChildren")}
               </div>
             ) : (
               <div className="space-y-2 pt-1">
                 {children.map((child, index) => (
                   <div key={index} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 gap-3">
                     <span className="text-xs font-bold text-slate-700 shrink-0">
-                      Trẻ {index + 1}
+                      {t("childIndex", { index: index + 1 })}
                     </span>
                     <div className="flex items-center gap-2 flex-1 justify-end">
                       <div className="relative flex-1 max-w-[110px]">
@@ -182,7 +182,7 @@ export default function FamilyConfigModal({ eventId, participant, open, onOpenCh
                           className="h-9 text-xs font-bold text-right rounded-lg bg-white border-slate-200 focus-visible:ring-blue-500 pr-8"
                         />
                         <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none">
-                          suất
+                          {t("portionUnit")}
                         </span>
                       </div>
                       <Button 
@@ -209,9 +209,9 @@ export default function FamilyConfigModal({ eventId, participant, open, onOpenCh
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-extrabold text-blue-900 uppercase tracking-wider">
-                  Tổng hệ số chia
+                  {t("totalWeightLabel")}
                 </span>
-                <span className="text-[11px] font-medium text-blue-600">Dùng để quy đổi suất tiền</span>
+                <span className="text-[11px] font-medium text-blue-600">{t("totalWeightDesc")}</span>
               </div>
             </div>
             <span className="text-2xl font-black text-blue-700 tracking-tight">

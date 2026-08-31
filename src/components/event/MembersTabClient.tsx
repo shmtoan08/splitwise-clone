@@ -1,20 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useParticipantIdentity } from "@/hooks/useParticipantIdentity";
-import { addParticipant, deleteParticipant } from "@/actions/participant";
+import { addParticipant, deleteParticipant, updateParticipantName } from "@/actions/participant";
 import { updateParticipantBudgets } from "@/actions/budget";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, User, Settings2, Users, Wallet, Trash2 } from "lucide-react";
+import { UserPlus, User, Settings2, Users, Wallet, Trash2, Pencil, Search, SlidersHorizontal, X, Lock } from "lucide-react";
 import { useAlert } from "@/providers/AlertProvider";
 import PaymentInfoForm from "@/components/event/PaymentInfoForm";
 import GroupManageModal from "./GroupManageModal";
 import FamilyConfigModal from "./FamilyConfigModal";
 import { formatCurrency } from "@/lib/utils";
+import BudgetManageModal from "./BudgetManageModal";
+import FilterSortModal from "@/components/shared/FilterSortModal";
 
 type PaymentInfo = {
   bankBIN: string | null;
@@ -46,6 +48,9 @@ type Props = {
   event: {
     id: string;
     isAdvancedMode: boolean;
+    isLocked?: boolean;
+    baseCurrency: string;
+    avgBudget?: number | null;
     participants: Participant[];
     groups: Group[];
   };
@@ -53,7 +58,8 @@ type Props = {
 };
 
 export default function MembersTabClient({ event, isCreator }: Props) {
-  const { id: eventId, isAdvancedMode, participants, groups } = event;
+  const { id: eventId, isAdvancedMode, participants, groups, baseCurrency, avgBudget } = event;
+  const isLocked = !!event.isLocked;
   const t = useTranslations("participant");
   const tPayment = useTranslations("paymentInfo");
   const tCommon = useTranslations("common");
@@ -62,8 +68,17 @@ export default function MembersTabClient({ event, isCreator }: Props) {
   const { isCurrentParticipant } = useParticipantIdentity(participants);
   const { showAlert } = useAlert();
 
+  const showLockedNotice = () => {
+    showAlert({
+      type: "info",
+      title: tCommon("error") || "Đã khóa",
+      message: "Sự kiện đã bị khóa. Chỉ người tạo nhóm mới có thể mở khóa để chỉnh sửa.",
+    });
+  };
+
   const [newName, setNewName] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [recentlyAddedId, setRecentlyAddedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openDialogId, setOpenDialogId] = useState<string | null>(null);
   
@@ -72,15 +87,91 @@ export default function MembersTabClient({ event, isCreator }: Props) {
   
   const [familyConfigParticipantId, setFamilyConfigParticipantId] = useState<string | null>(null);
 
+  // --- FILTER & SORT STATES ---
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterGroupId, setFilterGroupId] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"group_name" | "name_asc" | "name_desc">("group_name");
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
   const realParticipants = participants.filter(p => p.name !== "🏢 Quỹ Công ty");
   
-  const sortedParticipants = [...realParticipants].sort((a, b) => {
-    const aIsMe = isCurrentParticipant(a.id);
-    const bIsMe = isCurrentParticipant(b.id);
-    if (aIsMe && !bIsMe) return -1;
-    if (!aIsMe && bIsMe) return 1;
-    return 0;
-  });
+  const filteredAndSortedParticipants = useMemo(() => {
+    let result = [...realParticipants];
+
+    // 1. Tìm kiếm theo tên thành viên hoặc tên nhóm
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((p) => {
+        const matchName = p.name.toLowerCase().includes(q);
+        const pGroups = groups.filter((g) => g.members.some((m) => m.participantId === p.id));
+        const matchGroup = pGroups.some((g) => g.name.toLowerCase().includes(q));
+        return matchName || matchGroup;
+      });
+    }
+
+    // 2. Lọc theo nhóm
+    if (filterGroupId !== "all") {
+      if (filterGroupId === "no_group") {
+        result = result.filter((p) => !groups.some((g) => g.members.some((m) => m.participantId === p.id)));
+      } else {
+        result = result.filter((p) => {
+          const grp = groups.find((g) => g.id === filterGroupId);
+          return grp?.members.some((m) => m.participantId === p.id);
+        });
+      }
+    }
+
+    // 3. Sắp xếp
+    const getFirstGroupName = (pId: string) => {
+      const pGroups = groups.filter((g) => g.members.some((m) => m.participantId === pId));
+      if (pGroups.length === 0) return "zzzzzz"; // Thành viên không thuộc nhóm nào xếp ở cuối
+      return pGroups[0].name.toLowerCase();
+    };
+
+    result.sort((a, b) => {
+      // 1. Bản thân (Me) LUÔN LUÔN nằm ở trên cùng
+      const aIsMe = isCurrentParticipant(a.id);
+      const bIsMe = isCurrentParticipant(b.id);
+      if (aIsMe && !bIsMe) return -1;
+      if (!aIsMe && bIsMe) return 1;
+
+      // 2. User vừa được thêm (recentlyAddedId) ưu tiên nằm ở ĐẦU nhóm "Thành viên khác" (ngay dưới Bạn)
+      if (recentlyAddedId) {
+        if (a.id === recentlyAddedId) return -1;
+        if (b.id === recentlyAddedId) return 1;
+      }
+
+      // Sắp xếp theo nhóm rồi theo tên (mặc định)
+      if (sortBy === "group_name") {
+        const grpA = getFirstGroupName(a.id);
+        const grpB = getFirstGroupName(b.id);
+        const grpCompare = grpA.localeCompare(grpB, "vi", { sensitivity: "base" });
+        if (grpCompare !== 0) return grpCompare;
+        return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
+      }
+
+      // Sắp xếp theo tên A - Z
+      if (sortBy === "name_asc") {
+        return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
+      }
+
+      // Sắp xếp theo tên Z - A
+      if (sortBy === "name_desc") {
+        return b.name.localeCompare(a.name, "vi", { sensitivity: "base" });
+      }
+
+      return 0;
+    });
+
+    return result;
+  }, [realParticipants, searchQuery, filterGroupId, sortBy, groups, isCurrentParticipant, recentlyAddedId]);
+
+  const hasActiveFilters = searchQuery.trim().length > 0 || filterGroupId !== "all" || sortBy !== "group_name";
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setFilterGroupId("all");
+    setSortBy("group_name");
+  };
 
   const totalBudget = realParticipants.reduce((sum, p) => sum + (p.budgetMode === "FIXED" ? (p.budget || 0) : 0), 0);
 
@@ -92,6 +183,10 @@ export default function MembersTabClient({ event, isCreator }: Props) {
   const [inlineBudgetStr, setInlineBudgetStr] = useState("");
 
   const handleAddMember = async () => {
+    if (isLocked) {
+      showLockedNotice();
+      return;
+    }
     const trimmed = newName.trim();
     if (!trimmed) {
       setError(tCommon("error"));
@@ -106,22 +201,37 @@ export default function MembersTabClient({ event, isCreator }: Props) {
       setError(result.error);
     } else {
       setNewName("");
+      if (result.data?.participantId) {
+        setRecentlyAddedId(result.data.participantId);
+      }
     }
     
     setIsAdding(false);
   };
 
   const handleCreateGroup = () => {
+    if (isLocked) {
+      showLockedNotice();
+      return;
+    }
     setSelectedGroup(null);
     setGroupModalOpen(true);
   };
 
   const handleEditGroup = (group: Group) => {
+    if (isLocked) {
+      showLockedNotice();
+      return;
+    }
     setSelectedGroup(group);
     setGroupModalOpen(true);
   };
 
   const openBudgetModal = () => {
+    if (isLocked) {
+      showLockedNotice();
+      return;
+    }
     const drafts: Record<string, number> = {};
     realParticipants.forEach(p => drafts[p.id] = p.budget || 0);
     setDraftBudgets(drafts);
@@ -145,6 +255,10 @@ export default function MembersTabClient({ event, isCreator }: Props) {
   };
 
   const saveBudgets = async (budgetsToSave: Record<string, number>) => {
+    if (isLocked) {
+      showLockedNotice();
+      return;
+    }
     const payload = Object.entries(budgetsToSave).map(([participantId, amount]) => ({
       participantId,
       budgetMode: "FIXED" as BudgetMode,
@@ -159,6 +273,10 @@ export default function MembersTabClient({ event, isCreator }: Props) {
   };
 
   const startInlineEdit = (p: Participant) => {
+    if (isLocked) {
+      showLockedNotice();
+      return;
+    }
     setEditingParticipantId(p.id);
     setInlineBudgetStr((p.budget || 0).toString());
   };
@@ -179,10 +297,105 @@ export default function MembersTabClient({ event, isCreator }: Props) {
     }
   };
 
+  const [editingNameParticipantId, setEditingNameParticipantId] = useState<string | null>(null);
+  const [inlineNameStr, setInlineNameStr] = useState("");
+
+  const startInlineNameEdit = (p: Participant) => {
+    if (isLocked) {
+      showLockedNotice();
+      return;
+    }
+    setEditingNameParticipantId(p.id);
+    setInlineNameStr(p.name);
+  };
+
+  const saveInlineNameEdit = async (p: Participant) => {
+    setEditingNameParticipantId(null);
+    const trimmed = inlineNameStr.trim();
+    
+    if (trimmed && trimmed !== p.name) {
+      const res = await updateParticipantName({
+        eventId,
+        participantId: p.id,
+        name: trimmed,
+      });
+      
+      if (!res.success) {
+        showAlert({
+          type: "error",
+          title: tCommon("error") || "Lỗi",
+          message: res.error,
+        });
+      }
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full relative bg-slate-50 overflow-hidden">
+      {/* --- THANH TÌM KIẾM & BỘ LỌC (STICKY HEADER) --- */}
+      {realParticipants.length > 0 && (
+        <div className="shrink-0 bg-white/90 backdrop-blur-md border-b border-slate-200/60 z-20 px-3 sm:px-6 py-2.5 sm:py-3 shadow-sm">
+          <div className="max-w-5xl mx-auto flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text"
+                  placeholder={t("searchPlaceholder", { fallback: "Tìm tên thành viên hoặc nhóm..." })}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-9 h-11 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all placeholder:text-slate-400"
+                />
+                {searchQuery && (
+                  <button 
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 bg-slate-200 rounded-full p-0.5"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              
+              <Button 
+                type="button"
+                variant="outline" 
+                onClick={() => setIsFilterModalOpen(true)}
+                className={`w-11 h-11 rounded-xl p-0 relative shrink-0 transition-all ${hasActiveFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}
+              >
+                <SlidersHorizontal className="w-5 h-5" />
+                {hasActiveFilters && (
+                  <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-indigo-600 ring-2 ring-white"></span>
+                )}
+              </Button>
+            </div>
+
+            {/* HIỂN THỊ CÁC BỘ LỌC ĐANG BẬT */}
+            {hasActiveFilters && (
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                {filterGroupId !== "all" && (
+                  <Badge variant="secondary" onClick={() => setFilterGroupId("all")} className="bg-slate-100 text-slate-700 hover:bg-slate-200 border-transparent text-xs px-2.5 py-1 rounded-lg cursor-pointer shrink-0">
+                    Nhóm: {filterGroupId === "no_group" ? t("noGroup", { fallback: "Chưa vào nhóm" }) : groups.find(g => g.id === filterGroupId)?.name} <X className="w-3 h-3 ml-1 inline" />
+                  </Badge>
+                )}
+                {sortBy !== "group_name" && (
+                  <Badge variant="secondary" onClick={() => setSortBy("group_name")} className="bg-slate-100 text-slate-700 hover:bg-slate-200 border-transparent text-xs px-2.5 py-1 rounded-lg cursor-pointer shrink-0">
+                    {sortBy === "name_asc" && t("sortByNameAsc", { fallback: "Tên (A - Z)" })}
+                    {sortBy === "name_desc" && t("sortByNameDesc", { fallback: "Tên (Z - A)" })}
+                    <X className="w-3 h-3 ml-1 inline" />
+                  </Badge>
+                )}
+                <button type="button" onClick={clearAllFilters} className="text-[11px] font-medium text-slate-400 hover:text-slate-700 whitespace-nowrap ml-1 underline underline-offset-2 shrink-0">
+                  {t("clearFilter", { fallback: "Xóa lọc" })}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Vùng nội dung cuộn */}
-      <div className="flex-1 px-3 sm:px-6 py-4 overflow-y-auto pb-4 scrollbar-hide">
+      <div className="flex-1 px-3 sm:px-6 py-4 overflow-y-auto pb-28 sm:pb-36 scrollbar-hide">
         
        {/* Header Actions Bar (Đã cân bằng lề trái & đổi màu Indigo) */}
         {(isAdvancedMode || participants.length > 2) && (
@@ -195,7 +408,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                   <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>{tBudget("totalBudget")}:</span>
                   <span className="font-bold text-slate-900">
-                    {formatCurrency(totalBudget, { currency: "VND" })}
+                    {formatCurrency(totalBudget, { currency: baseCurrency })}
                   </span>
                 </div>
               ) : (
@@ -238,14 +451,21 @@ export default function MembersTabClient({ event, isCreator }: Props) {
         )}
 
         {/* Members List */}
-        {sortedParticipants.length === 0 ? (
+        {realParticipants.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-slate-400 text-sm">
             {t("noMembers")}
           </div>
+        ) : filteredAndSortedParticipants.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-slate-400 text-sm gap-2">
+            <Search className="w-8 h-8 text-slate-300" />
+            <p className="font-medium">{t("searchEmpty", { fallback: "Không tìm thấy thành viên phù hợp." })}</p>
+            <Button variant="link" onClick={clearAllFilters} className="text-indigo-600 font-semibold">{t("clearFilter", { fallback: "Xóa bộ lọc" })}</Button>
+          </div>
         ) : (
           <ul className="space-y-2.5">
-            {sortedParticipants.map((p) => {
+            {filteredAndSortedParticipants.map((p) => {
               const isMe = isCurrentParticipant(p.id);
+              const isJustAdded = recentlyAddedId === p.id;
               const pGroups = groups.filter(g => g.members.some(m => m.participantId === p.id));
               
               return (
@@ -254,7 +474,9 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                   className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all ${
                     isMe 
                       ? "bg-emerald-50/60 border-emerald-300/80 shadow-sm ring-1 ring-emerald-500/10" 
-                      : "bg-white border-slate-200/80 hover:border-slate-300"
+                      : isJustAdded
+                        ? "bg-indigo-50/40 border-indigo-300/80 shadow-sm ring-1 ring-indigo-500/20 animate-in fade-in slide-in-from-top-2 duration-300"
+                        : "bg-white border-slate-200/80 hover:border-slate-300"
                   }`}
                 >
                   <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
@@ -268,13 +490,37 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
-                          {p.name}
-                        </p>
+                        {editingNameParticipantId === p.id ? (
+                          <Input
+                            autoFocus
+                            type="text"
+                            className="h-7 text-xs sm:text-sm py-0 bg-white rounded-lg border-indigo-400 focus-visible:ring-indigo-500 min-w-[120px] max-w-[180px]"
+                            value={inlineNameStr}
+                            onChange={(e) => setInlineNameStr(e.target.value)}
+                            onBlur={() => saveInlineNameEdit(p)}
+                            onKeyDown={(e) => e.key === "Enter" && saveInlineNameEdit(p)}
+                          />
+                        ) : (
+                          <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
+                            {p.name}
+                          </p>
+                        )}
                         {isMe && (
                           <Badge className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 border-emerald-200 shrink-0">
                             {t("youLabel")}
                           </Badge>
+                        )}
+                        {/* Nút Sửa tên */}
+                        {(isCreator || isMe) && p.name !== "🏢 Quỹ Công ty" && editingNameParticipantId !== p.id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 w-7 h-7 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 active:scale-95 transition-all -ml-0.5"
+                            title="Sửa tên"
+                            onClick={() => startInlineNameEdit(p)}
+                          >
+                            <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                          </Button>
                         )}
                       </div>
 
@@ -295,7 +541,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                               className="text-xs sm:text-sm font-semibold text-emerald-700 bg-emerald-100/60 hover:bg-emerald-100 px-2.5 py-1 rounded-lg cursor-pointer transition-colors" 
                               onClick={() => startInlineEdit(p)}
                             >
-                              {formatCurrency(p.budget || 0, { currency: "VND" })}
+                              {formatCurrency(p.budget || 0, { currency: baseCurrency })}
                             </span>
                           )}
                         </div>
@@ -327,11 +573,18 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                   </div>
 
                   <div className="shrink-0 flex items-center gap-1.5">
+
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setFamilyConfigParticipantId(p.id)}
-                      className={`h-9 rounded-full px-2.5 transition-all ${p.weight && p.weight > 1 ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                      onClick={() => {
+                        if (isLocked) {
+                          showLockedNotice();
+                          return;
+                        }
+                        setFamilyConfigParticipantId(p.id);
+                      }}
+                      className={`h-9 rounded-full px-2.5 transition-all ${p.weight && p.weight > 1 ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'} ${isLocked ? "opacity-60" : ""}`}
                       title={t("familyConfigTitle")}
                     >
                       <Users className="w-4 h-4" />
@@ -359,7 +612,12 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                           <DialogHeader>
                             <DialogTitle className="text-xl font-bold text-slate-900 text-center">{tPayment("dialogTitle")}</DialogTitle>
                           </DialogHeader>
-                          <PaymentInfoForm eventId={eventId} currentPaymentInfo={p.paymentInfo ?? null} onSuccess={() => setOpenDialogId(null)} />
+                          <PaymentInfoForm 
+                            eventId={eventId} 
+                            currency={baseCurrency}
+                            currentPaymentInfo={p.paymentInfo ?? null} 
+                            onSuccess={() => setOpenDialogId(null)} 
+                          />
                         </DialogContent>
                       </Dialog>
                     )}
@@ -368,9 +626,13 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="shrink-0 w-9 h-9 rounded-full text-rose-500 hover:bg-rose-50 hover:text-rose-600 active:scale-95 transition-all"
+                        className={`shrink-0 w-9 h-9 rounded-full text-rose-500 hover:bg-rose-50 hover:text-rose-600 active:scale-95 transition-all ${isLocked ? "opacity-60" : ""}`}
                         title={t("deleteMemberTitle")}
                         onClick={() => {
+                          if (isLocked) {
+                            showLockedNotice();
+                            return;
+                          }
                           showAlert({
                             type: "warning",
                             title: t("deleteMemberTitle"),
@@ -404,39 +666,47 @@ export default function MembersTabClient({ event, isCreator }: Props) {
         )}
       </div>
 
-      {/* FOOTER NEO CỐ ĐỊNH Ở ĐÁY MÀN HÌNH (Sticky Bottom Floating Bar) */}
-      <div className="sticky bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-slate-50 via-slate-50/95 to-transparent pt-6 pb-3 sm:pb-4 px-3 sm:px-6 pointer-events-none shrink-0">
-        <div className="pointer-events-auto max-w-2xl mx-auto w-full flex flex-col items-center">
-          
-          {error && (
-            <div className="mb-2 bg-rose-50 text-rose-600 text-xs font-semibold px-3 py-1 rounded-full border border-rose-100 shadow-sm animate-in slide-in-from-bottom-2">
-              {error}
-            </div>
+      {/* FOOTER NEO CỐ ĐỊNH Ở ĐÁY MÀN HÌNH (Floating Absolute Bar giống ExpenseTab) */}
+      <div className="absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 flex justify-center pointer-events-none z-40 w-full px-4">
+        <div className="pointer-events-auto max-w-xl mx-auto w-full flex flex-col items-center">
+          {!isLocked ? (
+            <>
+              {error && (
+                <div className="mb-2 bg-rose-50 text-rose-600 text-xs font-semibold px-3 py-1 rounded-full border border-rose-100 shadow-sm animate-in slide-in-from-bottom-2">
+                  {error}
+                </div>
+              )}
+              
+              {/* Thanh Input hợp nhất co giãn linh hoạt */}
+              <div className="relative flex items-center bg-white rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-200/90 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all p-1 sm:p-1.5 w-full backdrop-blur-md">
+                <div className="pl-3 pr-1.5 text-slate-400 shrink-0">
+                  <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                
+                <Input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddMember()}
+                  placeholder={t("addMemberPlaceholder")}
+                  className="flex-1 h-9 sm:h-10 border-0 shadow-none bg-transparent focus-visible:ring-0 text-base sm:text-sm px-0 placeholder:text-slate-400 min-w-0"
+                  disabled={isAdding}
+                />
+                
+                <Button
+                  onClick={handleAddMember}
+                  disabled={isAdding || !newName.trim()}
+                  className="h-9 sm:h-10 px-4 sm:px-5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm active:scale-95 transition-all shrink-0 ml-1.5 whitespace-nowrap shadow-sm"
+                >
+                  <span>{t("addButton")}</span>
+                </Button>
+              </div>
+            </>
+          ) : (
+            <span className="inline-flex items-center gap-2 bg-slate-800/90 text-white px-5 py-2.5 rounded-full text-xs font-medium shadow-xl backdrop-blur-sm">
+              <Lock className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>Sự kiện đã chốt sổ, không thể thêm thành viên</span>
+            </span>
           )}
-          
-          {/* Thanh Input hợp nhất co giãn linh hoạt */}
-          <div className="relative flex items-center bg-white rounded-full shadow-md shadow-slate-200/60 border border-slate-200/80 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all p-1 sm:p-1.5 w-full">
-            <div className="pl-3 pr-1.5 text-slate-400 shrink-0">
-              <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
-            
-            <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAddMember()}
-              placeholder={t("addMemberPlaceholder")}
-              className="flex-1 h-9 sm:h-10 border-0 shadow-none bg-transparent focus-visible:ring-0 text-base sm:text-sm px-0 placeholder:text-slate-400 min-w-0"
-              disabled={isAdding}
-            />
-            
-            <Button
-              onClick={handleAddMember}
-              disabled={isAdding || !newName.trim()}
-              className="h-9 sm:h-10 px-4 sm:px-5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm active:scale-95 transition-all shrink-0 ml-1.5 whitespace-nowrap"
-            >
-              <span>{t("addButton")}</span>
-            </Button>
-          </div>
         </div>
       </div>
 
@@ -457,49 +727,41 @@ export default function MembersTabClient({ event, isCreator }: Props) {
         onOpenChange={(open) => !open && setFamilyConfigParticipantId(null)}
       />
 
-      <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
-        <DialogContent className="sm:max-w-md w-[95vw] rounded-3xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">{tBudget("manageBudget")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex items-center gap-2">
-              <Input 
-                type="number" 
-                placeholder={tBudget("totalBudget")} 
-                value={totalInput} 
-                onChange={(e) => setTotalInput(e.target.value)} 
-                // Thêm text-base sm:text-sm vào cuối class
-                className="flex-1 rounded-xl h-10 border-slate-200 focus-visible:ring-emerald-500 text-base sm:text-sm" 
-              />
-              <Button variant="outline" onClick={handleSplitEvenly} className="rounded-xl border-slate-200 hover:bg-slate-50 text-slate-700 h-10">{tBudget("splitEvenly")}</Button>
-            </div>
-            <div className="max-h-60 overflow-y-auto space-y-2 border-t border-slate-100 pt-3 mt-2">
-              {realParticipants.map(p => (
-                <div key={p.id} className="flex items-center justify-between gap-3 py-1">
-                  <span className="font-medium text-sm truncate flex-1 text-slate-800">{p.name}</span>
-                  <Input 
-                    type="number" 
-                    value={draftBudgets[p.id] || 0} 
-                    onChange={(e) => setDraftBudgets(prev => ({...prev, [p.id]: parseInt(e.target.value) || 0}))} 
-                    // Thêm text-base sm:text-sm vào cuối class
-                    className="w-32 text-right rounded-lg h-9 border-slate-200 focus-visible:ring-emerald-500 text-base sm:text-sm" 
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="max-h-60 overflow-y-auto space-y-2 border-t border-slate-100 pt-3 mt-2">
-              {realParticipants.map(p => (
-                <div key={p.id} className="flex items-center justify-between gap-3 py-1">
-                  <span className="font-medium text-sm truncate flex-1 text-slate-800">{p.name}</span>
-                  <Input type="number" value={draftBudgets[p.id] || 0} onChange={(e) => setDraftBudgets(prev => ({...prev, [p.id]: parseInt(e.target.value) || 0}))} className="w-32 text-right rounded-lg h-9 border-slate-200 focus-visible:ring-emerald-500" />
-                </div>
-              ))}
-            </div>
-            <Button onClick={handleSaveBudgetModal} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 font-medium">{tCommon("save")}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Filter & Sort Dialog */}
+      <FilterSortModal
+        isOpen={isFilterModalOpen}
+        onClose={setIsFilterModalOpen}
+        title={t("filterModalTitle", { fallback: "Sắp xếp & Bộ lọc" })}
+        sortTitle={t("sortBy", { fallback: "Sắp xếp theo" })}
+        sortOptions={[
+          { id: "group_name", label: t("sortByGroup", { fallback: "Mặc định (Theo Nhóm)" }) },
+          { id: "name_asc", label: t("sortByNameAsc", { fallback: "Tên (A - Z)" }) },
+          { id: "name_desc", label: t("sortByNameDesc", { fallback: "Tên (Z - A)" }) },
+        ]}
+        currentSort={sortBy}
+        onSortChange={(val) => setSortBy(val as any)}
+        filterTitle={t("filterByGroup", { fallback: "Lọc theo nhóm" })}
+        filterOptions={
+          groups.length > 0 
+            ? [
+                { id: "all", label: t("allGroups", { fallback: "Tất cả" }) },
+                ...groups.map(g => ({ id: g.id, label: `${g.name} (${g.members.length})` })),
+                { id: "no_group", label: t("noGroup", { fallback: "Chưa vào nhóm" }) }
+              ] 
+            : undefined
+        }
+        currentFilter={filterGroupId}
+        onFilterChange={setFilterGroupId}
+      />
+
+      <BudgetManageModal
+        open={isBudgetModalOpen}
+        onOpenChange={setIsBudgetModalOpen}
+        eventId={eventId}
+        baseCurrency={baseCurrency}
+        avgBudget={avgBudget}
+        participants={participants}
+      />
     </div>
   );
 }

@@ -38,8 +38,9 @@ export default function ClaimIdentityModal({ eventId, participants }: Props) {
   // Modal sẽ ẩn nếu không cần định danh, HOẶC nếu người dùng đã bấm Bỏ qua
   if (!needsIdentityClaim || isSkipped) return null;
 
-  // LOGIC MỚI: Kiểm tra xem nhóm đã có ai chưa
-  const isBrandNewEvent = participants.length === 0;
+  // LOGIC: Lọc bỏ tài khoản ảo Quỹ Công ty sinh ra tự động
+  const realParticipants = participants.filter((p) => p.name !== "🏢 Quỹ Công ty");
+  const isBrandNewEvent = realParticipants.length === 0;
 
   const handleClaim = async (participantId: string) => {
     setLoadingId(participantId);
@@ -77,7 +78,7 @@ export default function ClaimIdentityModal({ eventId, participants }: Props) {
     }
   };
 
-  const unclaimedParticipants = participants.filter((p) => !p.deviceToken);
+  const unclaimedParticipants = realParticipants.filter((p) => !p.deviceToken);
 
   return (
     <Dialog open={true}>

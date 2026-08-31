@@ -12,6 +12,7 @@ export const updateParticipantBudgetsSchema = z.object({
       budget: z.number().int().min(0, "Ngân sách không được âm"),
     })
   ),
+  avgBudget: z.number().int().min(0).optional(),
 });
 
 export type UpdateParticipantBudgetsInput = z.infer<typeof updateParticipantBudgetsSchema>;

@@ -10,6 +10,7 @@ import CurrencySettingButton from "@/components/event/CurrencySettingButton";
 import AdvancedModeSwitch from "@/components/event/AdvancedModeSwitch";
 import { getTranslations } from "next-intl/server";
 import RecentEventTracker from "@/components/event/RecentEventTracker";
+import EventTitleHeader from "@/components/event/EventTitleHeader";
 
 import type { Metadata } from "next";
 
@@ -67,14 +68,6 @@ export default async function EventLayout({ children, params }: Props) {
   const deviceToken = cookieStore.get("split-app-device-token")?.value;
   const isCreator = !!(deviceToken && event.creatorDeviceToken === deviceToken);
 
-  const titleLength = event.title.length;
-  let titleSizeClass = "text-xl sm:text-2xl";
-  if (titleLength > 30 && titleLength <= 60) {
-    titleSizeClass = "text-lg sm:text-xl";
-  } else if (titleLength > 60) {
-    titleSizeClass = "text-base sm:text-lg";
-  }
-
   // Đếm số thành viên thực tế (bỏ qua Quỹ công ty)
   const realMemberCount = event.participants.filter(p => p.name !== "🏢 Quỹ Công ty").length;
 
@@ -121,15 +114,14 @@ export default async function EventLayout({ children, params }: Props) {
       <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-0 sm:px-6 lg:px-8 bg-transparent sm:my-6 min-h-0 overflow-hidden relative">
         <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden bg-white sm:shadow-md sm:rounded-3xl sm:border border-slate-200/60">
           
-          {/* 2. SUB-HEADER: Tiêu đề nhóm được đưa xuống đây */}
-          <div className="px-4 py-4 sm:px-6 border-b border-slate-100 bg-white shrink-0">
-            <h1 className={`font-extrabold text-slate-900 break-words leading-tight line-clamp-2 ${titleSizeClass}`}>
-              {event.title}
-            </h1>
-            <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1.5">
-              {t("memberCount", { count: realMemberCount })}
-            </p>
-          </div>
+          {/* 2. SUB-HEADER: Tiêu đề nhóm và đổi tên sự kiện */}
+          <EventTitleHeader
+            eventId={event.id}
+            initialTitle={event.title}
+            isCreator={isCreator}
+            isLocked={event.isLocked}
+            memberCount={realMemberCount}
+          />
 
           {/* Vùng chứa nội dung các Tabs */}
           {children}

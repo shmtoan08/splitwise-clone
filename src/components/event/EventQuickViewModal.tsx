@@ -35,6 +35,7 @@ type Settlement = {
   toName: string;
   isToMe: boolean;
   amount: number;
+  status: "PENDING" | "MARKED_PAID" | "CONFIRMED";
 };
 
 type SummaryData = {
@@ -76,6 +77,15 @@ export default function EventQuickViewModal({ eventId, eventTitle, open, onOpenC
     }
   }, [open, eventId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const pendingSettlements = (data?.settlements || []).filter((s) => s.status !== "CONFIRMED");
+  const sortedPendingSettlements = [...pendingSettlements].sort((a, b) => {
+    const aIsMe = a.isFromMe || a.isToMe;
+    const bIsMe = b.isFromMe || b.isToMe;
+    if (aIsMe && !bIsMe) return -1;
+    if (!aIsMe && bIsMe) return 1;
+    return 0;
+  });
+
   const handleExportCSV = () => {
     if (!data) return;
 
@@ -94,13 +104,14 @@ export default function EventQuickViewModal({ eventId, eventTitle, open, onOpenC
     
     // Part 2: Settlements
     csvContent += `${t("settlementsTitle")}\n`;
-    csvContent += `${t("csvFromCol")},${t("csvAmountCol")},${t("csvToCol")}\n`;
+    csvContent += `${t("csvFromCol")},${t("csvAmountCol")},${t("csvToCol")},${t("csvStatusCol")}\n`;
     
-    if (data.settlements.length === 0) {
+    if (sortedPendingSettlements.length === 0) {
       csvContent += `${t("allSettled")}\n`;
     } else {
-      data.settlements.forEach((s) => {
-        csvContent += `"${s.fromName}",${s.amount},"${s.toName}"\n`;
+      sortedPendingSettlements.forEach((s) => {
+        const statusText = s.status === "MARKED_PAID" ? t("markedPaidBadge", { fallback: "Đã chuyển" }) : "";
+        csvContent += `"${s.fromName}",${s.amount},"${s.toName}","${statusText}"\n`;
       });
     }
 
@@ -118,18 +129,18 @@ export default function EventQuickViewModal({ eventId, eventTitle, open, onOpenC
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
-        className="w-full sm:max-w-lg rounded-3xl p-0 overflow-hidden flex flex-col gap-0 max-h-[85vh] sm:max-h-[80vh]"
+        className="w-[95vw] sm:max-w-xl md:max-w-2xl rounded-3xl p-0 overflow-hidden flex flex-col gap-0 max-h-[88vh] sm:max-h-[82vh]"
       >
         {/* Header */}
-        <DialogHeader className="px-5 pt-5 pb-3 shrink-0 border-b border-slate-100">
-          <DialogTitle className="text-lg font-bold text-slate-900 truncate pr-6">
+        <DialogHeader className="px-5 sm:px-6 pt-5 pb-3 shrink-0 border-b border-slate-100">
+          <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900 truncate pr-6">
             {eventTitle}
           </DialogTitle>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">{t("subtitle")}</p>
+          <p className="text-xs sm:text-sm text-slate-400 font-medium mt-0.5">{t("subtitle")}</p>
         </DialogHeader>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-4 space-y-5">
+        <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6 py-4 space-y-6">
           {/* Loading */}
           {isLoading && (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
@@ -185,7 +196,7 @@ export default function EventQuickViewModal({ eventId, eventTitle, open, onOpenC
                     return (
                       <div
                         key={m.id}
-                        className={`flex items-center gap-3 p-3 rounded-2xl border ${balanceBg}`}
+                        className={`flex items-center gap-3 p-3 sm:p-3.5 rounded-2xl border ${balanceBg}`}
                       >
                         {/* Avatar */}
                         <div className={`w-9 h-9 rounded-full shadow-sm flex items-center justify-center shrink-0 ${m.isMe ? 'bg-emerald-600 border-2 border-emerald-500 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>
@@ -194,20 +205,20 @@ export default function EventQuickViewModal({ eventId, eventTitle, open, onOpenC
 
                         {/* Name + details */}
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-900 text-sm truncate">{m.name}</p>
-                          <div className="flex gap-3 mt-0.5">
-                            <span className="text-[11px] text-slate-400 font-medium">
+                          <p className="font-bold text-slate-900 text-sm sm:text-base truncate" title={m.name}>{m.name}</p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
+                            <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
                               {t("paid")}: <span className="text-slate-600 font-semibold">{formatCurrency(m.paid, { currency: data.currency })}</span>
                             </span>
-                            <span className="text-[11px] text-slate-400 font-medium">
+                            <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
                               {t("owed")}: <span className="text-slate-600 font-semibold">{formatCurrency(m.owed, { currency: data.currency })}</span>
                             </span>
                           </div>
                         </div>
 
                         {/* Balance */}
-                        <div className={`flex items-center gap-1 font-extrabold text-sm ${balanceColor} shrink-0`}>
-                          <BalanceIcon className="w-3.5 h-3.5" />
+                        <div className={`flex items-center gap-1 font-extrabold text-sm sm:text-base ${balanceColor} shrink-0`}>
+                          <BalanceIcon className="w-4 h-4" />
                           {isPositive && "+"}
                           {formatCurrency(m.balance, { currency: data.currency })}
                         </div>
@@ -217,39 +228,76 @@ export default function EventQuickViewModal({ eventId, eventTitle, open, onOpenC
                 </div>
               </section>
 
-              {/* Section 2: Thanh toán */}
+              {/* Section 2: Cần thanh toán (Pending Settlements) */}
               <section className="space-y-2.5">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">
-                  {t("settlementsTitle")}
-                </h3>
-                {data.settlements.length === 0 ? (
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    {t("settlementsTitle")}
+                  </h3>
+                  {sortedPendingSettlements.length > 0 && (
+                    <span className="bg-amber-100 text-amber-700 text-[10px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full">
+                      {sortedPendingSettlements.length}
+                    </span>
+                  )}
+                </div>
+
+                {sortedPendingSettlements.length === 0 ? (
                   <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
                     <PartyPopper className="w-5 h-5 text-emerald-600 shrink-0" />
                     <p className="text-sm font-semibold text-emerald-700">{t("allSettled")}</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {data.settlements.map((s, i) => (
+                  <div className="space-y-2.5">
+                    {sortedPendingSettlements.map((s, i) => (
                       <div
                         key={i}
-                        className="flex items-center gap-2 p-3 rounded-2xl bg-white border border-slate-200 shadow-sm"
+                        className="p-3 sm:p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-4"
                       >
-                        {/* From */}
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${s.isFromMe ? 'bg-emerald-600 border-2 border-emerald-500 text-white' : 'bg-rose-50 border border-rose-100 text-rose-500'}`}>
-                          {s.isFromMe ? <User className="w-3.5 h-3.5" /> : <span className="text-xs font-bold">{s.fromName.charAt(0).toUpperCase()}</span>}
-                        </div>
-                        <span className={`font-bold text-sm truncate max-w-[80px] ${s.isFromMe ? 'text-emerald-700' : 'text-slate-800'}`}>{s.fromName}</span>
+                        {/* Cụm Người gửi -> Người nhận (Tối ưu full chiều ngang trên mobile và phân bố đều trên desktop) */}
+                        <div className="flex items-center justify-between sm:justify-start gap-2 flex-1 min-w-0">
+                          {/* Người gửi */}
+                          <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial sm:max-w-[220px]">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                              s.isFromMe ? 'bg-emerald-600 text-white ring-2 ring-emerald-400' : 'bg-rose-50 border border-rose-100 text-rose-500'
+                            }`}>
+                              {s.isFromMe ? <User className="w-3.5 h-3.5" /> : s.fromName.charAt(0).toUpperCase()}
+                            </div>
+                            <span className={`font-bold text-xs sm:text-sm truncate ${s.isFromMe ? 'text-emerald-700' : 'text-slate-800'}`} title={s.fromName}>
+                              {s.fromName}
+                            </span>
+                          </div>
 
-                        {/* Arrow + Amount */}
-                        <div className="flex flex-col items-center flex-1 px-1">
-                          <span className="text-[11px] font-bold text-blue-600">{formatCurrency(s.amount, { currency: data.currency })}</span>
-                          <ArrowRight className="w-4 h-4 text-slate-300 mt-0.5" />
+                          {/* Mũi tên */}
+                          <ArrowRight className="w-4 h-4 text-slate-300 shrink-0 mx-1" />
+
+                          {/* Người nhận */}
+                          <div className="flex items-center justify-end sm:justify-start gap-2 min-w-0 flex-1 sm:flex-initial sm:max-w-[220px]">
+                            <span className={`font-bold text-xs sm:text-sm truncate text-right sm:text-left ${s.isToMe ? 'text-emerald-700' : 'text-slate-800'}`} title={s.toName}>
+                              {s.toName}
+                            </span>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                              s.isToMe ? 'bg-emerald-600 text-white ring-2 ring-emerald-400' : 'bg-emerald-50 border border-emerald-100 text-emerald-600'
+                            }`}>
+                              {s.isToMe ? <User className="w-3.5 h-3.5" /> : s.toName.charAt(0).toUpperCase()}
+                            </div>
+                          </div>
                         </div>
 
-                        {/* To */}
-                        <span className={`font-bold text-sm truncate max-w-[80px] text-right ${s.isToMe ? 'text-emerald-700' : 'text-slate-800'}`}>{s.toName}</span>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${s.isToMe ? 'bg-emerald-600 border-2 border-emerald-500 text-white' : 'bg-emerald-50 border border-emerald-100 text-emerald-500'}`}>
-                          {s.isToMe ? <User className="w-3.5 h-3.5" /> : <span className="text-xs font-bold">{s.toName.charAt(0).toUpperCase()}</span>}
+                        {/* Cụm Số tiền & Badge trạng thái */}
+                        <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t border-slate-100 sm:border-t-0 shrink-0">
+                          <span className="text-xs text-slate-400 font-medium sm:hidden">
+                            {t("csvAmountCol", { fallback: "Số tiền" })}:
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-sm sm:text-base text-blue-600 font-mono">
+                              {formatCurrency(s.amount, { currency: data.currency })}
+                            </span>
+                            {s.status === "MARKED_PAID" && (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full">
+                                {t("markedPaidBadge", { fallback: "Đã chuyển" })}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}

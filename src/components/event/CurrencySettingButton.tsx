@@ -11,17 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { updateEventCurrency } from "@/actions/event";
 import { Globe, Check, Loader2 } from "lucide-react";
-
-// Danh sách tiền tệ được hỗ trợ
-const SUPPORTED_CURRENCIES = [
-  { code: "VND", label: "Việt Nam Đồng (VND)" },
-  { code: "JPY", label: "Nhật Bản Yên (JPY)" },
-  { code: "USD", label: "Đô la Mỹ (USD)" },
-  { code: "EUR", label: "Euro (EUR)" },
-  { code: "SGD", label: "Đô la Singapore (SGD)" },
-  { code: "THB", label: "Bath Thái (THB)" },
-  { code: "KRW", label: "Won Hàn Quốc (KRW)" },
-];
+import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 
 type Props = {
   eventId: string;

@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { splitByShares, splitEvenly } from "@/utils/algorithm";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { User, RotateCcw, Equal, AlertCircle, CheckSquare, Square } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,6 +37,7 @@ type Props = {
   groups?: Group[];
   onChange: (mode: "AMOUNT" | "SHARES", splits: SplitItem[]) => void;
   onValidityChange: (valid: boolean) => void;
+  isReadOnly?: boolean;
 };
 
 export default function SplitRows({
@@ -49,9 +50,21 @@ export default function SplitRows({
   groups = [],
   onChange,
   onValidityChange,
+  isReadOnly = false,
 }: Props) {
   const t = useTranslations("expense");
   const displayCurrency = originalCurrency ?? currency;
+
+  // Sort participants so checked ones are at the top initially
+  const sortedParticipants = useMemo(() => {
+    if (!initialSplits || initialSplits.length === 0) return participants;
+    const splitIds = new Set(initialSplits.map(s => s.participantId));
+    return [...participants].sort((a, b) => {
+      const aSelected = splitIds.has(a.id) ? 1 : 0;
+      const bSelected = splitIds.has(b.id) ? 1 : 0;
+      return bSelected - aSelected;
+    });
+  }, [participants, initialSplits]);
 
   // ─── Init State ─────────────────────────────────────────────────────────────
   const [activeMode, setActiveMode] = useState<"AMOUNT" | "SHARES">(initialMode);
@@ -228,6 +241,7 @@ export default function SplitRows({
   }, [executeAction, activeMode, sharesMap, recalculateAmounts]);
 
   const handleGroupClick = useCallback((group: Group) => {
+    if (isReadOnly) return;
     executeAction(() => {
       const groupMemberIds = group.members.map(m => m.participantId);
       const validIds = new Set(groupMemberIds.filter(id => participants.some(p => p.id === id)));
@@ -327,6 +341,7 @@ export default function SplitRows({
   }, [activeMode, selectedIds, recalculateAmounts]);
 
   const handleRowClick = useCallback((p: Participant) => {
+    if (isReadOnly) return;
     if (!selectedIds.has(p.id)) {
       setSelectedIds(prev => {
         const next = new Set(prev);
@@ -417,6 +432,7 @@ export default function SplitRows({
             <button
               type="button"
               onClick={handleToggleSelectAll}
+              disabled={isReadOnly}
               className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
                 isAllSelected 
                   ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
@@ -440,6 +456,7 @@ export default function SplitRows({
             <button
               type="button"
               onClick={handleRestoreShares}
+              disabled={isReadOnly}
               className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
                 activeMode === "SHARES" ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
               }`}
@@ -451,6 +468,7 @@ export default function SplitRows({
             <button
               type="button"
               onClick={handleEqualSplit}
+              disabled={isReadOnly}
               className={`flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full transition-all active:scale-95 ${
                 activeMode === "AMOUNT" ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
               }`}
@@ -477,7 +495,7 @@ export default function SplitRows({
 
       {/* Danh sách participants */}
       <div className="space-y-2.5 px-1 pb-4 pt-1">
-        {participants.map((p) => {
+        {sortedParticipants.map((p) => {
           const isSelected = selectedIds.has(p.id);
           const shares = sharesMap[p.id] ?? (p.weight ?? 1);
           const amountVal = amountMap[p.id] ?? 0;
@@ -496,6 +514,7 @@ export default function SplitRows({
                 {/* Checkbox */}
                 <Checkbox
                   checked={isSelected}
+                  disabled={isReadOnly}
                   onCheckedChange={(checked) => handleToggle(p.id, !!checked)}
                   onClick={(e) => e.stopPropagation()}
                   className="w-4 h-4 sm:w-5 sm:h-5 rounded-md border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 shrink-0"
@@ -528,6 +547,7 @@ export default function SplitRows({
                       min="0"
                       value={shares === 0 ? "" : shares}
                       onChange={(e) => handleSharesChange(p.id, e.target.value)}
+                      disabled={isReadOnly}
                       // FIX iOS ZOOM: Thay text-[13px] bằng text-base sm:text-sm, đổi height thành h-10
                       className="w-full h-10 rounded-xl text-center font-bold text-base sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-1 shadow-inner"
                       placeholder="0"
@@ -550,6 +570,7 @@ export default function SplitRows({
                       inputMode="numeric"
                       value={amountVal === 0 ? "" : amountVal.toLocaleString()}
                       onChange={(e) => handleAmountChange(p.id, e.target.value)}
+                      disabled={isReadOnly}
                       // FIX iOS ZOOM: Thay text-[13px] bằng text-base sm:text-sm, đổi height thành h-10
                       className="w-full h-10 rounded-xl text-right font-bold text-base sm:text-sm text-blue-700 bg-blue-50/50 border-blue-200 focus-visible:ring-blue-600 focus-visible:bg-white px-2 shadow-inner"
                       placeholder="0"

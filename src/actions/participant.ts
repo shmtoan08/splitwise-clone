@@ -21,11 +21,15 @@ export async function addParticipant(
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true },
+    select: { id: true, isLocked: true },
   });
 
   if (!event) {
     return { success: false, error: "Nhóm không tồn tại" };
+  }
+
+  if (event.isLocked) {
+    return { success: false, error: "Sự kiện đã bị khóa, không thể thêm thành viên mới." };
   }
 
   try {
@@ -82,11 +86,15 @@ export async function deleteParticipant(eventId: string, participantId: string):
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { creatorDeviceToken: true },
+    select: { creatorDeviceToken: true, isLocked: true },
   });
 
   if (!event || event.creatorDeviceToken !== deviceToken) {
     return { success: false, error: "unauthorized" };
+  }
+
+  if (event.isLocked) {
+    return { success: false, error: "Sự kiện đã bị khóa, không thể xóa thành viên." };
   }
 
   try {
@@ -144,11 +152,15 @@ export async function claimParticipantIdentity(
   try {
     const participant = await prisma.participant.findUnique({
       where: { id: participantId, eventId },
-      select: { id: true, deviceToken: true },
+      select: { id: true, name: true, deviceToken: true },
     });
 
     if (!participant) {
       return { success: false, error: "Không tìm thấy thành viên này trong nhóm." };
+    }
+
+    if (participant.name === "🏢 Quỹ Công ty") {
+      return { success: false, error: "Không thể chọn vai trò Quỹ Công ty." };
     }
 
     if (participant.deviceToken) {
@@ -257,6 +269,14 @@ export async function updateParticipantFamilyConfig(
   const weight = adults + children.reduce((sum, child) => sum + child, 0);
 
   try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
+    });
+    if (event?.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
+    }
+
     await prisma.participant.update({
       where: { id: participantId, eventId },
       data: {
@@ -270,5 +290,40 @@ export async function updateParticipantFamilyConfig(
   } catch (error) {
     console.error("[updateParticipantFamilyConfig] error:", error);
     return { success: false, error: "Không thể lưu cấu hình gia đình. Vui lòng thử lại." };
+  }
+}
+
+export async function updateParticipantName({
+  eventId,
+  participantId,
+  name,
+}: {
+  eventId: string;
+  participantId: string;
+  name: string;
+}) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return { success: false, error: "Tên thành viên không được để trống" };
+  }
+
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
+    });
+    if (event?.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
+    }
+
+    await prisma.participant.update({
+      where: { id: participantId, eventId },
+      data: { name: trimmed },
+    });
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: "Không thể đổi tên thành viên" };
   }
 }

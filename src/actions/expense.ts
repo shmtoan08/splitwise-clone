@@ -98,10 +98,13 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
     // 1. Lấy baseCurrency của event
     const eventRecord = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { baseCurrency: true },
+      select: { baseCurrency: true, isLocked: true },
     });
     if (!eventRecord) {
       return { success: false, error: "Sự kiện không tồn tại." };
+    }
+    if (eventRecord.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa, không thể thêm chi tiêu mới." };
     }
     const baseCurrency = eventRecord.baseCurrency;
 
@@ -242,11 +245,12 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
   try {
     // 1. Lấy bản ghi expense cũ (để kiểm tra originalCurrency đã lưu và receiptUrl)
     const [eventRecord, existingExpense] = await Promise.all([
-      prisma.event.findUnique({ where: { id: eventId }, select: { baseCurrency: true } }),
+      prisma.event.findUnique({ where: { id: eventId }, select: { baseCurrency: true, isLocked: true } }),
       prisma.expense.findUnique({ where: { id }, select: { originalCurrency: true, exchangeRate: true, receiptUrl: true } }),
     ]);
 
     if (!eventRecord) return { success: false, error: "Sự kiện không tồn tại." };
+    if (eventRecord.isLocked) return { success: false, error: "Sự kiện đã bị khóa, không thể chỉnh sửa chi tiêu." };
     if (!existingExpense) return { success: false, error: "Khoản chi không tồn tại." };
 
     const baseCurrency = eventRecord.baseCurrency;
@@ -375,10 +379,16 @@ export async function deleteExpense(expenseId: string, eventId: string): Promise
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
     if (!deviceToken) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
 
-    const currentParticipant = await prisma.participant.findFirst({
-      where: { eventId, deviceToken },
-      select: { id: true },
-    });
+    const [eventRecord, currentParticipant] = await Promise.all([
+      prisma.event.findUnique({ where: { id: eventId }, select: { isLocked: true } }),
+      prisma.participant.findFirst({
+        where: { eventId, deviceToken },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!eventRecord) return { success: false, error: "Sự kiện không tồn tại." };
+    if (eventRecord.isLocked) return { success: false, error: "Sự kiện đã bị khóa, không thể xóa chi tiêu." };
     if (!currentParticipant) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
 
     await prisma.expense.delete({ where: { id: expenseId } });

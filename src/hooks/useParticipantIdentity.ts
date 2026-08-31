@@ -46,8 +46,8 @@ export function useParticipantIdentity(
       return;
     }
 
-    // Tìm participant khớp deviceToken trên thiết bị này
-    const matched = participants.find((p) => p.deviceToken === deviceToken);
+    // Tìm participant khớp deviceToken trên thiết bị này (bỏ qua tài khoản ảo Quỹ Công ty)
+    const matched = participants.find((p) => p.deviceToken === deviceToken && p.name !== "🏢 Quỹ Công ty");
 
     if (matched) {
       setIdentity({

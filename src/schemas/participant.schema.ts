@@ -21,20 +21,20 @@ export const claimIdentitySchema = z.object({
 export type ClaimIdentityInput = z.infer<typeof claimIdentitySchema>;
 
 export const PaymentInfoSchema = z.object({
-  bankBIN: z.string().min(1).max(20).optional().nullable(),
+  bankBIN: z.string().min(1).max(100).optional().nullable(),
   accountNumber: z.string().min(1).max(50).optional().nullable(),
   accountName: z.string().min(1).max(100).optional().nullable(),
   paypayLink: z.string().url().max(200).optional().nullable(),
 }).refine(
   (data) => {
-    const hasVietQR = !!data.bankBIN || !!data.accountNumber || !!data.accountName;
-    if (hasVietQR) {
+    const hasBank = !!data.bankBIN || !!data.accountNumber || !!data.accountName;
+    if (hasBank) {
       return !!data.bankBIN && !!data.accountNumber && !!data.accountName;
     }
     return true;
   },
   {
-    message: "Để dùng VietQR, phải nhập đủ Ngân hàng, Số tài khoản và Tên chủ tài khoản",
+    message: "Vui lòng nhập đủ Ngân hàng, Số tài khoản và Tên chủ tài khoản",
     path: ["bankBIN"], // Assign error to bankBIN field generically
   }
 );

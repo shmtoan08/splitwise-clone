@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { updateParticipantBudgetsSchema, budgetActionSchema } from "@/schemas/budget.schema";
 import type { ActionResult } from "@/types";
 import { revalidatePath } from "next/cache";
+import { z } from "zod"; // Thêm Zod để validate mảng subsidies truyền từ UI
 
 const FUND_PARTICIPANT_NAME = "🏢 Quỹ Công ty";
 
@@ -13,10 +14,25 @@ export async function updateParticipantBudgets(data: unknown): Promise<ActionRes
     return { success: false, error: parsed.error.errors[0].message };
   }
 
-  const { eventId, budgets } = parsed.data;
+  const { eventId, budgets, avgBudget } = parsed.data;
 
   try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
+    });
+    if (event?.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
+    }
+
     await prisma.$transaction(async (tx) => {
+      // 0. Cập nhật avgBudget cho sự kiện
+      if (avgBudget !== undefined) {
+        await tx.event.update({
+          where: { id: eventId },
+          data: { avgBudget },
+        });
+      }
       // 1. Cập nhật từng participant
       for (const b of budgets) {
         // Ép budget = 0 nếu không phải FIXED
@@ -45,19 +61,12 @@ export type BudgetStatRow = {
   participantId: string;
   name: string;
   budgetMode: "FIXED" | "UNLIMITED" | "SELF_FUNDED";
-  // A = budget (hoặc null nếu không phải FIXED)
   budgetA: number | null;
-  // B = actualSpent
   spentB: number;
-  // C = Lố
   overC: number;
-  // D = Dư
   surplusD: number;
-  // E = Nhận bù đắp
   receivedSubsidyE: number;
-  // F = Tự bù thêm
   selfFundF: number;
-  // G = Công ty chi trả
   companyPaidG: number;
 };
 
@@ -148,88 +157,85 @@ export async function getBudgetStats(eventId: string): Promise<ActionResult<{ st
   }
 }
 
+// ----------------------------------------------------------------------
+// CẬP NHẬT MỚI: Nhận trực tiếp mảng subsidies từ giao diện truyền xuống
+// ----------------------------------------------------------------------
+const applySubsidyClientSchema = z.object({
+  eventId: z.string(),
+  title: z.string().default("Bù đắp ngân sách tự động"),
+  subsidies: z.array(
+    z.object({
+      participantId: z.string(),
+      amount: z.number(),
+    })
+  ),
+});
+
 export async function applyCrossSubsidy(data: unknown): Promise<ActionResult<{ message?: string }>> {
-  const parsed = budgetActionSchema.safeParse(data);
+  // Thay vì dùng budgetActionSchema, ta dùng schema mới để lấy được mảng subsidies
+  const parsed = applySubsidyClientSchema.safeParse(data);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.errors[0].message };
+    return { success: false, error: "Dữ liệu gửi lên không hợp lệ." };
   }
 
-  const { eventId } = parsed.data;
+  const { eventId, title, subsidies } = parsed.data;
 
   try {
-    const statsResult = await getBudgetStats(eventId);
-    if (!statsResult.success) throw new Error(statsResult.error);
-    
-    const { stats } = statsResult.data;
-
-    // 1. Lọc chỉ FIXED
-    const fixedStats = stats.filter(s => s.budgetMode === "FIXED");
-    
-    // 2. Xác định tổng lố (ΣO) và tổng dư (T_dư)
-    const overList = fixedStats.filter(s => s.overC > 0);
-    const totalOver = overList.reduce((sum, s) => sum + s.overC, 0); // ΣO
-    const totalSurplus = fixedStats.reduce((sum, s) => sum + s.surplusD, 0); // T_dư
-
-    // 4. Rẽ nhánh
-    if (totalOver === 0) {
-      return { success: false, error: "Không có ai thuộc chế độ Cố định bị vượt ngân sách, không cần bù đắp." };
-    }
-    if (totalSurplus <= 0) {
-      return { success: false, error: "Ngân sách nhóm không đủ để bù đắp." };
-    }
-
-    // 5. Tính S_i với last-item correction
-    const subsidyAmounts: { participantId: string; amount: number }[] = [];
-    let runningTotal = 0;
-
-    overList.forEach((entry, idx) => {
-      const isLast = idx === overList.length - 1;
-      let s: number;
-      if (isLast) {
-        s = totalSurplus - runningTotal;
-      } else {
-        s = Math.round(totalSurplus * (entry.overC / totalOver));
-        runningTotal += s;
-      }
-      subsidyAmounts.push({ participantId: entry.participantId, amount: s });
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
     });
-
-    // 7. Upsert Participant "🏢 Quỹ Công ty"
-    let fundParticipant = await prisma.participant.findFirst({
-      where: { eventId, name: FUND_PARTICIPANT_NAME },
-      select: { id: true },
-    });
-
-    if (!fundParticipant) {
-      fundParticipant = await prisma.participant.create({
-        data: { eventId, name: FUND_PARTICIPANT_NAME, deviceToken: null },
-        select: { id: true },
-      });
+    if (event?.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
     }
 
-    // 8 & 9. Transaction xoá cũ tạo mới
     await prisma.$transaction(async (tx) => {
+      // 1. Xóa toàn bộ hóa đơn bù đắp chéo cũ
       await tx.expense.deleteMany({
         where: { eventId, isCrossSubsidy: true },
       });
 
-      const crossExpense = await tx.expense.create({
-        data: {
-          eventId,
-          title: "Bù đắp ngân sách tự động — không phải khoản chi thực tế",
-          amount: totalSurplus,
-          payerId: fundParticipant.id,
-          isCrossSubsidy: true,
-          version: 1,
-        },
+      // 2. Nếu mảng rỗng (người dùng tắt chế độ bù đắp), việc xóa ở trên là đủ.
+      if (subsidies.length === 0) return;
+
+      // 3. Tìm hoặc tạo Participant "🏢 Quỹ Công ty"
+      let fundParticipant = await tx.participant.findFirst({
+        where: { eventId, name: FUND_PARTICIPANT_NAME },
+        select: { id: true },
       });
 
-      await tx.expenseSplit.createMany({
-        data: subsidyAmounts.map((s) => ({
-          expenseId: crossExpense.id,
-          participantId: s.participantId,
-          amount: s.amount,
-        })),
+      if (!fundParticipant) {
+        fundParticipant = await tx.participant.create({
+          data: { 
+            eventId, 
+            name: FUND_PARTICIPANT_NAME, 
+            budgetMode: "UNLIMITED",
+            deviceToken: null 
+          },
+          select: { id: true },
+        });
+      }
+
+      // 4. Lấy tổng số tiền bù đắp từ các khoản người dùng đồng ý
+      const totalAmount = subsidies.reduce((sum, s) => sum + s.amount, 0);
+
+      // 5. Tạo khoản chi bù đắp mới
+      await tx.expense.create({
+        data: {
+          eventId,
+          title,
+          amount: totalAmount,
+          payerId: fundParticipant.id,
+          isCrossSubsidy: true,
+          splitMode: "AMOUNT",
+          version: 1,
+          splits: {
+            create: subsidies.map((s) => ({
+              participantId: s.participantId,
+              amount: s.amount,
+            })),
+          },
+        },
       });
     });
 
@@ -237,7 +243,7 @@ export async function applyCrossSubsidy(data: unknown): Promise<ActionResult<{ m
     return { success: true, data: { message: "Đã áp dụng bù đắp chéo thành công!" } };
   } catch (error) {
     console.error("[applyCrossSubsidy] error:", error);
-    return { success: false, error: "Lỗi hệ thống khi tính bù đắp ngân sách." };
+    return { success: false, error: "Lỗi hệ thống khi lưu bù đắp ngân sách." };
   }
 }
 
@@ -250,6 +256,14 @@ export async function removeCrossSubsidy(data: unknown): Promise<ActionResult<{ 
   const { eventId } = parsed.data;
 
   try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
+    });
+    if (event?.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
+    }
+
     await prisma.expense.deleteMany({
       where: { eventId, isCrossSubsidy: true },
     });

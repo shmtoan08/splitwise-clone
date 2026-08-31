@@ -65,12 +65,16 @@ export async function getEventById(eventId: string) {
         title: true,
         createdAt: true,
         baseCurrency: true,
+        avgBudget: true,
         creatorDeviceToken: true,
         isAdvancedMode: true,
+        isLocked: true,
+        seikyuClaimerId: true,
         participants: {
           select: {
             id: true,
             name: true,
+            createdAt: true,
             deviceToken: true,
             budgetMode: true,
             budget: true,
@@ -152,7 +156,16 @@ export async function getEventSummary(eventId: string): Promise<
       data: {
         currency: string;
         memberStats: Array<{ id: string; name: string; isMe: boolean; paid: number; owed: number; balance: number }>;
-        settlements: Array<{ fromId: string; fromName: string; isFromMe: boolean; toId: string; toName: string; isToMe: boolean; amount: number }>;
+        settlements: Array<{
+          fromId: string;
+          fromName: string;
+          isFromMe: boolean;
+          toId: string;
+          toName: string;
+          isToMe: boolean;
+          amount: number;
+          status: "PENDING" | "MARKED_PAID" | "CONFIRMED";
+        }>;
         hasExpenses: boolean;
       };
     }
@@ -162,20 +175,38 @@ export async function getEventSummary(eventId: string): Promise<
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
 
-    // Fetch event với minimal data cần thiết
+    // Fetch event với đầy đủ data cho smart settlement
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       select: {
         baseCurrency: true,
         creatorDeviceToken: true,
+        isAdvancedMode: true,
+        seikyuClaimerId: true,
         participants: {
-          select: { id: true, name: true, deviceToken: true },
+          select: {
+            id: true,
+            name: true,
+            deviceToken: true,
+            budgetMode: true,
+            budget: true,
+            weight: true,
+          },
         },
         expenses: {
           select: {
             payerId: true,
             amount: true,
+            isCrossSubsidy: true,
             splits: { select: { participantId: true, amount: true } },
+          },
+        },
+        settlements: {
+          select: {
+            fromId: true,
+            toId: true,
+            amount: true,
+            status: true,
           },
         },
       },
@@ -193,36 +224,120 @@ export async function getEventSummary(eventId: string): Promise<
       return { success: false, error: "unauthorized" };
     }
 
-    const { calculateBalances, simplifyDebts } = await import("@/utils/algorithm");
+    const { simplifyDebts } = await import("@/utils/algorithm");
 
-    const participantIds = event.participants.map((p) => p.id);
-    const participantMap = new Map(event.participants.map((p) => [p.id, p.name]));
+    const paidMap = new Map<string, number>();
+    const owedMap = new Map<string, number>();
+    const subsidyMap = new Map<string, number>();
 
-    // Tính stats từng người
-    const statsMap = new Map<string, { paid: number; owed: number }>(
-      participantIds.map((id) => [id, { paid: 0, owed: 0 }])
-    );
+    event.participants.forEach((p) => {
+      paidMap.set(p.id, 0);
+      owedMap.set(p.id, 0);
+    });
+
+    const fundParticipant = event.participants.find((p) => p.name === "🏢 Quỹ Công ty");
+    const fundId = fundParticipant?.id;
+    const virtualFundId = fundId || "virtual-fund";
+
+    if (!paidMap.has(virtualFundId)) paidMap.set(virtualFundId, 0);
+    if (!owedMap.has(virtualFundId)) owedMap.set(virtualFundId, 0);
+
     for (const ex of event.expenses) {
-      const payer = statsMap.get(ex.payerId);
-      if (payer) payer.paid += ex.amount;
-      for (const s of ex.splits) {
-        const sp = statsMap.get(s.participantId);
-        if (sp) sp.owed += s.amount;
+      if (ex.isCrossSubsidy) {
+        for (const s of ex.splits) {
+          subsidyMap.set(s.participantId, (subsidyMap.get(s.participantId) || 0) + s.amount);
+        }
+      } else {
+        paidMap.set(ex.payerId, (paidMap.get(ex.payerId) || 0) + ex.amount);
+        for (const s of ex.splits) {
+          owedMap.set(s.participantId, (owedMap.get(s.participantId) || 0) + s.amount);
+        }
       }
     }
 
-    const memberStats = event.participants.map((p) => {
-      const s = statsMap.get(p.id) ?? { paid: 0, owed: 0 };
-      const isMe = !!deviceToken && p.deviceToken === deviceToken;
-      return { id: p.id, name: p.name, isMe, paid: s.paid, owed: s.owed, balance: s.paid - s.owed };
+    const finalBalances: Record<string, number> = {};
+
+    event.participants.forEach((p) => {
+      let paid = paidMap.get(p.id) || 0;
+      let owed = owedMap.get(p.id) || 0;
+      let subsidy = subsidyMap.get(p.id) || 0;
+
+      if (event.isAdvancedMode && p.id !== virtualFundId) {
+        let companyCovered = 0;
+        if (p.budgetMode === "UNLIMITED") {
+          companyCovered = owed;
+        } else if (p.budgetMode === "FIXED") {
+          companyCovered = Math.min(owed, p.budget || 0) + subsidy;
+        }
+        owed -= companyCovered;
+        owedMap.set(virtualFundId, (owedMap.get(virtualFundId) || 0) + companyCovered);
+      }
+
+      if (p.id !== virtualFundId) {
+        finalBalances[p.id] = paid - owed;
+      }
     });
 
-    // Tính settlements trên server
-    const balances = calculateBalances(participantIds, event.expenses);
-    const txns = simplifyDebts(balances);
-    const settlements = txns.map((t) => {
-      const fromParticipant = event.participants.find((p) => p.id === t.from);
-      const toParticipant = event.participants.find((p) => p.id === t.to);
+    finalBalances[virtualFundId] = (paidMap.get(virtualFundId) || 0) - (owedMap.get(virtualFundId) || 0);
+
+    if (finalBalances[virtualFundId] === 0 && !fundId) {
+      delete finalBalances[virtualFundId];
+    }
+
+    const claimerId = event.seikyuClaimerId;
+    if (claimerId && finalBalances[virtualFundId]) {
+      const fundBal = finalBalances[virtualFundId];
+      finalBalances[claimerId] = (finalBalances[claimerId] || 0) + fundBal;
+      delete finalBalances[virtualFundId];
+    }
+
+    const balanceArray = Object.entries(finalBalances).map(([id, balance]) => ({
+      id,
+      balance,
+    }));
+
+    let txs: { from: string; to: string; amount: number }[] = [];
+    if (claimerId) {
+      for (const { id, balance } of balanceArray) {
+        if (id === claimerId) continue;
+        if (balance < 0) {
+          txs.push({ from: id, to: claimerId, amount: Math.abs(balance) });
+        } else if (balance > 0) {
+          txs.push({ from: claimerId, to: id, amount: balance });
+        }
+      }
+    } else {
+      txs = simplifyDebts(balanceArray);
+    }
+
+    const participantMap = new Map(event.participants.map((p) => [p.id, p]));
+    if (!participantMap.has("virtual-fund")) {
+      participantMap.set("virtual-fund", {
+        id: "virtual-fund",
+        name: "🏢 Quỹ Công ty",
+        deviceToken: null,
+        budgetMode: "FIXED" as any,
+        budget: 0,
+        weight: 1,
+      });
+    }
+
+    const memberStats = event.participants
+      .filter((p) => p.name !== "🏢 Quỹ Công ty")
+      .map((p) => {
+        const paid = paidMap.get(p.id) || 0;
+        const owed = owedMap.get(p.id) || 0;
+        const balance = finalBalances[p.id] ?? 0;
+        const isMe = !!deviceToken && p.deviceToken === deviceToken;
+        return { id: p.id, name: p.name, isMe, paid, owed, balance };
+      });
+
+    const settlements = txs.map((t) => {
+      const fromParticipant = participantMap.get(t.from);
+      const toParticipant = participantMap.get(t.to);
+      const dbSettlement = event.settlements.find(
+        (s) => s.fromId === t.from && s.toId === t.to && s.amount === t.amount && s.status !== "PENDING"
+      );
       return {
         fromId: t.from,
         fromName: fromParticipant?.name ?? "Unknown",
@@ -231,8 +346,11 @@ export async function getEventSummary(eventId: string): Promise<
         toName: toParticipant?.name ?? "Unknown",
         isToMe: !!deviceToken && toParticipant?.deviceToken === deviceToken,
         amount: t.amount,
+        status: (dbSettlement?.status ?? "PENDING") as "PENDING" | "MARKED_PAID" | "CONFIRMED",
       };
     });
+
+    const hasActualExpenses = event.expenses.some((ex) => !ex.isCrossSubsidy);
 
     return {
       success: true,
@@ -240,7 +358,7 @@ export async function getEventSummary(eventId: string): Promise<
         currency: event.baseCurrency,
         memberStats,
         settlements,
-        hasExpenses: event.expenses.length > 0,
+        hasExpenses: hasActualExpenses,
       },
     };
   } catch (error) {
@@ -277,12 +395,17 @@ export async function updateEventCurrency(data: unknown): Promise<ActionResult> 
       where: { id: eventId },
       select: {
         creatorDeviceToken: true,
+        isLocked: true,
         _count: { select: { expenses: true } },
       },
     });
 
     if (!event) {
       return { success: false, error: "Sự kiện không tồn tại." };
+    }
+
+    if (event.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa, không thể đổi tiền tệ." };
     }
 
     // 3. Kiểm tra quyền creator
@@ -320,10 +443,11 @@ export async function toggleAdvancedMode(eventId: string, isAdvancedMode: boolea
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { creatorDeviceToken: true },
+      select: { creatorDeviceToken: true, isLocked: true },
     });
 
     if (!event) return { success: false, error: "Sự kiện không tồn tại" };
+    if (event.isLocked) return { success: false, error: "Sự kiện đã bị khóa." };
     
     if (event.creatorDeviceToken !== deviceToken) {
       return { success: false, error: "unauthorized" };
@@ -339,5 +463,117 @@ export async function toggleAdvancedMode(eventId: string, isAdvancedMode: boolea
   } catch (error) {
     console.error("[toggleAdvancedMode] error:", error);
     return { success: false, error: "Lỗi hệ thống" };
+  }
+}
+
+export async function updateSeikyuClaimer({
+  eventId,
+  claimerId,
+}: {
+  eventId: string;
+  claimerId: string | null;
+}) {
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
+    });
+    if (event?.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
+    }
+
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { seikyuClaimerId: claimerId },
+    });
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Lỗi khi cập nhật người đại diện Seikyu:", error);
+    return { success: false, error: "Không thể lưu người đại diện vào hệ thống." };
+  }
+}
+
+export async function updateEventTitle({
+  eventId,
+  title,
+}: {
+  eventId: string;
+  title: string;
+}): Promise<ActionResult> {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    return { success: false, error: "Tên sự kiện không được để trống" };
+  }
+  if (trimmed.length > 100) {
+    return { success: false, error: "Tên sự kiện tối đa 100 ký tự" };
+  }
+
+  try {
+    const cookieStore = await cookies();
+    const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { creatorDeviceToken: true, isLocked: true },
+    });
+
+    if (!event) {
+      return { success: false, error: "Sự kiện không tồn tại." };
+    }
+
+    if (event.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa, không thể đổi tên." };
+    }
+
+    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+      return { success: false, error: "unauthorized" };
+    }
+
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { title: trimmed },
+    });
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("[updateEventTitle] error:", error);
+    return { success: false, error: "Lỗi hệ thống khi cập nhật tên sự kiện." };
+  }
+}
+
+export async function toggleEventLock(
+  eventId: string,
+  isLocked: boolean
+): Promise<ActionResult> {
+  try {
+    const cookieStore = await cookies();
+    const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { creatorDeviceToken: true },
+    });
+
+    if (!event) {
+      return { success: false, error: "Sự kiện không tồn tại." };
+    }
+
+    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+      return { success: false, error: "unauthorized" };
+    }
+
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { isLocked },
+    });
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("[toggleEventLock] error:", error);
+    return { success: false, error: "Lỗi hệ thống khi thay đổi trạng thái khóa." };
   }
 }
