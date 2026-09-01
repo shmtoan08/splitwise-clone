@@ -6,6 +6,7 @@ import { LanguageSwitcher } from "@/components/core/LanguageSwitcher";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { auth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { Link } from "@/i18n/routing";
 import { UserCircle, Wallet } from "lucide-react";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -41,19 +42,21 @@ export default async function HomePage() {
             </span>
           </div>
 
-          {/* Phải: Actions (Ngôn ngữ + Đăng nhập) */}
+          {/* Phải: Actions (Ngôn ngữ + Đăng nhập / Dashboard) */}
           <div className="flex items-center gap-2 sm:gap-3">
             <LanguageSwitcher />
             
             {!session?.user ? (
               <AuthModal variant="ghost" className="rounded-full font-semibold px-4" triggerText={t("Core.login_button")} />
             ) : (
-              <Button variant="outline" className="rounded-full flex items-center gap-2 shadow-sm hover:shadow-md active:scale-95 transition-all h-9 px-3 sm:px-4">
-                <UserCircle className="w-4 h-4 text-slate-500" />
-                <span className="max-w-[100px] sm:max-w-[150px] truncate text-sm font-medium">
-                  {session.user.name || session.user.email || t("Core.my_account")}
-                </span>
-              </Button>
+              <Link href="/dashboard">
+                <Button variant="outline" className="rounded-full flex items-center gap-2 shadow-sm hover:shadow-md hover:border-emerald-300 active:scale-95 transition-all h-9 px-3 sm:px-4 cursor-pointer">
+                  <UserCircle className="w-4 h-4 text-emerald-600" />
+                  <span className="max-w-[100px] sm:max-w-[150px] truncate text-sm font-medium">
+                    {session.user.name || session.user.email || t("Core.my_account")}
+                  </span>
+                </Button>
+              </Link>
             )}
           </div>
         </div>

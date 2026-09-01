@@ -31,7 +31,26 @@
     "invalid_email": "Định dạng email không hợp lệ",
     "required_password": "Vui lòng nhập mật khẩu",
     "password_too_short": "Mật khẩu phải chứa ít nhất 6 ký tự",
-    "passwords_do_not_match": "Mật khẩu xác nhận không khớp"
+    "passwords_do_not_match": "Mật khẩu xác nhận không khớp",
+    "continue_with_google": "Tiếp tục với Google",
+    "or_continue_with": "Hoặc tiếp tục với",
+    "verification_email_sent": "Một email xác nhận đã được gửi đến hộp thư của bạn. Vui lòng kiểm tra để kích hoạt tài khoản.",
+    "email_not_verified": "Tài khoản của bạn chưa được xác thực. Vui lòng kiểm tra email."
+  },
+  "VerifyEmail": {
+    "title": "Xác thực Email",
+    "description": "Đang kiểm tra và xác thực tài khoản của bạn",
+    "verifying": "Đang xác thực tài khoản của bạn, vui lòng đợi trong giây lát...",
+    "success_title": "Xác thực thành công!",
+    "success_description": "Địa chỉ email của bạn đã được xác thực thành công. Bạn đã có thể đăng nhập vào ứng dụng.",
+    "error_title": "Xác thực thất bại",
+    "token_not_found": "Mã xác thực không hợp lệ hoặc không tồn tại.",
+    "token_expired": "Mã xác thực đã hết hạn. Vui lòng đăng ký lại để nhận mã mới.",
+    "email_not_found": "Không tìm thấy tài khoản tương ứng với mã xác thực này.",
+    "missing_token": "Không tìm thấy mã xác thực (token).",
+    "system_error": "Đã xảy ra lỗi hệ thống trong quá trình xác thực. Vui lòng thử lại sau.",
+    "back_to_home": "Về trang chủ",
+    "go_to_login": "Đăng nhập ngay"
   },
   "Core": {
   "switch_language": "Đổi ngôn ngữ",
@@ -252,6 +271,15 @@
     "confirmClaimBtn": "Xác nhận & Vào nhóm",
     "invalidPasscode": "Mã PIN không chính xác. Vui lòng kiểm tra lại.",
     "backBtn": "Quay lại",
+    "claimEventBannerTitle": "Lưu nhóm này vào tài khoản",
+    "claimEventBannerDesc": "Bạn đang đăng nhập. Hãy liên kết nhóm này vào tài khoản để dễ dàng xem lại bất cứ lúc nào.",
+    "claimEventBannerBtn": "Lưu vào tài khoản",
+    "claimEventSuccess": "Đã lưu nhóm vào tài khoản thành công!",
+    "alreadyLinked": "Nhóm này đã được liên kết với tài khoản.",
+    "participant_not_found": "Vui lòng chọn hoặc nhận vai trò thành viên của bạn trong nhóm trước khi lưu vào tài khoản.",
+    "missing_device_token": "Không tìm thấy thông tin thiết bị. Vui lòng tải lại trang.",
+    "unauthorized": "Bạn cần đăng nhập để thực hiện thao tác này.",
+    "already_linked": "Thành viên này đã được liên kết với một tài khoản khác.",
     "searchPlaceholder": "Tìm tên thành viên hoặc nhóm...",
     "searchEmpty": "Không tìm thấy thành viên phù hợp.",
     "filterModalTitle": "Sắp xếp & Bộ lọc",
@@ -490,5 +518,20 @@
     "savePasscode": "Lưu mã PIN",
     "removePasscode": "Xóa mã PIN",
     "saveSuccess": "Đã lưu cài đặt!"
+  },
+  "dashboard": {
+    "title": "Các nhóm của tôi",
+    "description": "Danh sách các sự kiện và chuyến đi bạn đã tham gia hoặc lưu vào tài khoản",
+    "emptyTitle": "Chưa có nhóm nào",
+    "emptyDesc": "Bạn chưa tham gia hoặc lưu nhóm nào vào tài khoản này. Hãy tạo nhóm mới hoặc vào nhóm từ liên kết của bạn bè để bắt đầu!",
+    "createEventBtn": "Trở về trang chủ để tạo nhóm",
+    "memberCount": "{count} thành viên",
+    "expenseCount": "{count} khoản chi",
+    "totalExpense": "Tổng chi",
+    "myRole": "Vai trò:",
+    "createdAt": "Tạo ngày {date}",
+    "lockedBadge": "Đã kết thúc",
+    "viewEvent": "Xem chi tiết",
+    "backHome": "Trang chủ"
   }
 }

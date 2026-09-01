@@ -43,7 +43,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     });
 
     if (result?.error) {
-      setServerError(t("invalid_credentials"));
+      if (result.error.includes("email_not_verified") || (result as any).code === "email_not_verified") {
+        setServerError(t("email_not_verified"));
+      } else {
+        setServerError(t("invalid_credentials"));
+      }
     } else {
       router.refresh();
       if (onSuccess) {

@@ -84,6 +84,7 @@ export async function getEventById(eventId: string) {
         participants: {
           select: {
             id: true,
+            userId: true,
             name: true,
             createdAt: true,
             deviceToken: true,

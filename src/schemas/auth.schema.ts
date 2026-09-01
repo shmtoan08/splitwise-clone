@@ -5,6 +5,7 @@ export const RegisterSchema = z
     email: z.string().email("invalid_email"),
     password: z.string().min(6, "password_too_short"),
     confirmPassword: z.string(),
+    locale: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "passwords_do_not_match",

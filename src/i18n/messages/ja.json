@@ -31,7 +31,26 @@
     "invalid_email": "無効なメールアドレス形式です",
     "required_password": "パスワードを入力してください",
     "password_too_short": "パスワードは6文字以上で入力してください",
-    "passwords_do_not_match": "パスワードが一致しません"
+    "passwords_do_not_match": "パスワードが一致しません",
+    "continue_with_google": "Googleで続ける",
+    "or_continue_with": "または",
+    "verification_email_sent": "確認メールを送信しました。メールを確認してアカウントを有効化してください。",
+    "email_not_verified": "アカウントがまだ認証されていません。メールを確認してください。"
+  },
+  "VerifyEmail": {
+    "title": "メールアドレス認証",
+    "description": "アカウントの認証情報を確認しています",
+    "verifying": "アカウントを認証しています。しばらくお待ちください...",
+    "success_title": "認証が完了しました！",
+    "success_description": "メールアドレスの認証が正常に完了しました。ログインしてご利用いただけます。",
+    "error_title": "認証に失敗しました",
+    "token_not_found": "認証トークンが無効であるか、存在しません。",
+    "token_expired": "認証トークンの有効期限が切れています。再度登録して新しいトークンを受け取ってください。",
+    "email_not_found": "この認証トークンに一致するアカウントが見つかりません。",
+    "missing_token": "認証トークンが指定されていません。",
+    "system_error": "認証処理中にシステムエラーが発生しました。後でもう一度お試しください。",
+    "back_to_home": "ホームに戻る",
+    "go_to_login": "ログインする"
   },
   "Core": {
   "switch_language": "言語を切り替える",
@@ -252,6 +271,15 @@
     "confirmClaimBtn": "認証して参加",
     "invalidPasscode": "PINコードが正しくありません。再度お試しください。",
     "backBtn": "戻る",
+    "claimEventBannerTitle": "このグループをアカウントに保存",
+    "claimEventBannerDesc": "ログイン中です。このグループをアカウントに連携して、いつでも簡単にアクセスできるようにします。",
+    "claimEventBannerBtn": "アカウントに保存",
+    "claimEventSuccess": "グループをアカウントに連携しました！",
+    "alreadyLinked": "このグループはすでにアカウントに連携されています。",
+    "participant_not_found": "アカウントに保存する前に、グループ内でご自身のメンバー名を選択してください。",
+    "missing_device_token": "端末情報が見つかりません。ページを再読み込みしてください。",
+    "unauthorized": "この操作を行うにはログインが必要です。",
+    "already_linked": "このメンバーはすでに別のアカウントに連携されています。",
     "searchPlaceholder": "メンバー名またはグループ名を検索...",
     "searchEmpty": "一致するメンバーが見つかりません。",
     "filterModalTitle": "並び替え＆フィルター",
@@ -487,5 +515,20 @@
     "savePasscode": "PINを保存",
     "removePasscode": "PINを削除",
     "saveSuccess": "設定を保存しました！"
+  },
+  "dashboard": {
+    "title": "マイグループ",
+    "description": "参加しているイベントやアカウントに保存したグループの一覧",
+    "emptyTitle": "グループがありません",
+    "emptyDesc": "まだアカウントにグループが保存されていません。新しいグループを作成するか、共有リンクからグループに参加してみましょう！",
+    "createEventBtn": "ホームに戻ってグループを作成",
+    "memberCount": "{count} 人のメンバー",
+    "expenseCount": "{count} 件の支出",
+    "totalExpense": "総支出",
+    "myRole": "あなたの役割:",
+    "createdAt": "{date} 作成",
+    "lockedBadge": "終了済み",
+    "viewEvent": "詳細を見る",
+    "backHome": "ホーム"
   }
 }

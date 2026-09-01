@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { RegisterSchema } from "@/schemas/auth.schema";
 import { registerUser } from "@/actions/auth";
 import { z } from "zod";
@@ -11,8 +11,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Mail, Lock } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { Loader2, Mail, Lock, MailCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type RegisterFormValues = z.infer<typeof RegisterSchema>;
@@ -24,8 +23,10 @@ interface RegisterFormProps {
 
 export function RegisterForm({ onSuccess, onGoToLogin }: RegisterFormProps) {
   const t = useTranslations("Auth");
+  const locale = useLocale();
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
   
   const {
     register,
@@ -38,30 +39,42 @@ export function RegisterForm({ onSuccess, onGoToLogin }: RegisterFormProps) {
 
   async function onSubmit(data: RegisterFormValues) {
     setServerError(null);
-    const result = await registerUser(data);
+    const result = await registerUser({ ...data, locale });
 
     if (!result.success) {
       setServerError(t(result.error as any));
     } else {
-      // Auto login after register
-      const loginResult = await signIn("credentials", {
-        redirect: false,
-        email: data.email,
-        password: data.password,
-      });
-
-      if (!loginResult?.error) {
-        router.refresh();
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          router.push("/");
-        }
-      } else {
-        if (onGoToLogin) onGoToLogin();
-        else router.push("/login");
-      }
+      setIsSuccess(true);
     }
+  }
+
+  if (isSuccess) {
+    return (
+      <div className="flex flex-col items-center justify-center py-6 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm">
+          <MailCheck className="w-8 h-8" />
+        </div>
+        <div className="space-y-1.5 px-2">
+          <p className="text-sm font-semibold text-emerald-700 leading-relaxed">
+            {t("verification_email_sent")}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            if (onGoToLogin) {
+              onGoToLogin();
+            } else {
+              router.push("/login");
+            }
+          }}
+          className="rounded-full h-10 px-6 text-sm font-medium border-slate-200 hover:bg-slate-50 active:scale-95 transition-all mt-2"
+        >
+          {t("login_link")}
+        </Button>
+      </div>
+    );
   }
 
   return (

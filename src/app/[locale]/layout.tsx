@@ -5,6 +5,7 @@ import { routing } from "@/i18n/routing";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AlertProvider } from "@/providers/AlertProvider";
+import { SessionProvider } from "next-auth/react";
 import "../globals.css";
 
 const inter = Inter({ subsets: ["latin", "vietnamese"] });
@@ -42,11 +43,13 @@ export default async function LocaleLayout({ children, params }: Props) {
   return (
     <html lang={locale}>
       <body className={inter.className}>
-        <NextIntlClientProvider messages={messages}>
-          <AlertProvider>
-            {children}
-          </AlertProvider>
-        </NextIntlClientProvider>
+        <SessionProvider>
+          <NextIntlClientProvider messages={messages}>
+            <AlertProvider>
+              {children}
+            </AlertProvider>
+          </NextIntlClientProvider>
+        </SessionProvider>
       </body>
     </html>
   );

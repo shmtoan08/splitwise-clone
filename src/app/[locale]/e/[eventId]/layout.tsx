@@ -12,6 +12,7 @@ import { LanguageSwitcher } from "@/components/core/LanguageSwitcher";
 import { getTranslations } from "next-intl/server";
 import RecentEventTracker from "@/components/event/RecentEventTracker";
 import EventTitleHeader from "@/components/event/EventTitleHeader";
+import ClaimEventBanner from "@/components/event/ClaimEventBanner";
 
 import type { Metadata } from "next";
 
@@ -68,6 +69,11 @@ export default async function EventLayout({ children, params }: Props) {
   const cookieStore = await cookies();
   const deviceToken = cookieStore.get("split-app-device-token")?.value;
   const isCreator = !!(deviceToken && event.creatorDeviceToken === deviceToken);
+
+  // Tìm participant tương ứng với thiết bị hiện tại
+  const currentParticipant = deviceToken
+    ? event.participants.find((p) => p.deviceToken === deviceToken)
+    : null;
 
   // Đếm số thành viên thực tế (bỏ qua Quỹ công ty)
   const realMemberCount = event.participants.filter(p => p.name !== "🏢 Quỹ Công ty").length;
@@ -129,6 +135,13 @@ export default async function EventLayout({ children, params }: Props) {
             isCreator={isCreator}
             isLocked={event.isLocked}
             memberCount={realMemberCount}
+          />
+
+          {/* Banner Lưu nhóm vào tài khoản đã đăng nhập */}
+          <ClaimEventBanner
+            eventId={event.id}
+            hasParticipant={!!currentParticipant}
+            participantUserId={currentParticipant?.userId ?? null}
           />
 
           {/* Vùng chứa nội dung các Tabs */}

@@ -6,6 +6,7 @@ import type { ActionResult } from "@/types";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
+import { auth } from "@/lib/auth";
 
 const DEVICE_TOKEN_COOKIE = "split-app-device-token";
 
@@ -485,5 +486,50 @@ export async function resetParticipantIdentity(
     return { success: false, error: "Lỗi hệ thống. Vui lòng thử lại sau." };
   }
 }
+
+export async function linkParticipantToUser(
+  eventId: string
+): Promise<ActionResult<{ participantId: string }>> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "unauthorized" };
+    }
+
+    const cookieStore = await cookies();
+    const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+    if (!deviceToken) {
+      return { success: false, error: "missing_device_token" };
+    }
+
+    const participant = await prisma.participant.findFirst({
+      where: {
+        eventId,
+        deviceToken,
+      },
+    });
+
+    if (!participant) {
+      return { success: false, error: "participant_not_found" };
+    }
+
+    if (participant.userId) {
+      return { success: false, error: "already_linked" };
+    }
+
+    await prisma.participant.update({
+      where: { id: participant.id },
+      data: { userId: session.user.id },
+    });
+
+    revalidatePath(`/e/${eventId}`, "layout");
+    revalidatePath(`/e/${eventId}`);
+    return { success: true, data: { participantId: participant.id } };
+  } catch (error) {
+    console.error("[linkParticipantToUser] error:", error);
+    return { success: false, error: "system_error" };
+  }
+}
+
 
 
