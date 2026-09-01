@@ -406,7 +406,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
               {isAdvancedMode ? (
                 <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 truncate">
                   <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{tBudget("totalBudget")}:</span>
+                  <span>{tBudget("totalBudget", { fallback: "Tổng ngân sách" })}:</span>
                   <span className="font-bold text-slate-900 font-mono sm:font-sans">
                     {formatCurrency(totalBudget, { currency: baseCurrency })}
                   </span>
@@ -443,7 +443,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                   variant="outline"
                   className="rounded-full bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all text-xs h-8 px-3 font-semibold"
                 >
-                  {tBudget("manageBudget")}
+                  {tBudget("manageBudget", { fallback: "Quản lý Ngân sách" })}
                 </Button>
               )}
             </div>

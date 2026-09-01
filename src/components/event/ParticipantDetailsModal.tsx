@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { User, Calendar, Receipt, Users, ArrowUpRight, ArrowDownLeft, ClipboardList } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import ExpenseForm from "./ExpenseForm";
 
 type Props = {
@@ -23,6 +24,11 @@ type Props = {
 };
 
 export default function ParticipantDetailsModal({ open, onOpenChange, participant, expenses, participants, currency, balance, isAdvancedMode, subsidy = 0, isEventCreator, currentUserId, eventId, groups = [] }: Props) {
+  const t = useTranslations("participantDetails");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
+  const dateLocale = locale === "ja" ? "ja-JP" : "vi-VN";
+
   const [activeTab, setActiveTab] = useState<"summary" | "paid" | "owed">("summary");
   const [selectedExpense, setSelectedExpense] = useState<any | null>(null);
 
@@ -92,21 +98,21 @@ export default function ParticipantDetailsModal({ open, onOpenChange, participan
               className={`flex-1 flex justify-center items-center gap-2 py-2 text-sm font-semibold rounded-lg transition-all ${activeTab === "summary" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
             >
               <ClipboardList className="w-4 h-4" />
-              Tổng kết
+              {t("summaryTab", { fallback: "Tổng kết" })}
             </button>
             <button 
               onClick={() => setActiveTab("owed")}
               className={`flex-1 flex justify-center items-center gap-2 py-2 text-sm font-semibold rounded-lg transition-all ${activeTab === "owed" ? "bg-white text-rose-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
             >
               <ArrowDownLeft className="w-4 h-4" />
-              Tham gia ({owedExpenses.length})
+              {t("owedTab", { count: owedExpenses.length, fallback: `Tham gia (${owedExpenses.length})` })}
             </button>
             <button 
               onClick={() => setActiveTab("paid")}
               className={`flex-1 flex justify-center items-center gap-2 py-2 text-sm font-semibold rounded-lg transition-all ${activeTab === "paid" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
             >
               <ArrowUpRight className="w-4 h-4" />
-              Ứng trước ({paidExpenses.length})
+              {t("paidTab", { count: paidExpenses.length, fallback: `Ứng trước (${paidExpenses.length})` })}
             </button>
           </div>
         </DialogHeader>
@@ -116,47 +122,47 @@ export default function ParticipantDetailsModal({ open, onOpenChange, participan
             <div className="flex flex-col gap-2.5 animate-in fade-in duration-300">
                {/* 1 Ngân sách cố định */}
                {hasBudget && <div className="flex justify-between items-center p-3.5 bg-white border border-slate-200/70 rounded-xl shadow-sm">
-                 <span className="text-sm font-medium text-slate-600">Ngân sách cố định</span>
+                 <span className="text-sm font-medium text-slate-600">{t("fixedBudget", { fallback: "Ngân sách cố định" })}</span>
                  <span className="font-bold text-slate-900">{formatCurrency(budget, { currency })}</span>
                </div>}
                {/* 2 Chi phí gánh */}
                <div className="flex justify-between items-center p-3.5 bg-white border border-slate-200/70 rounded-xl shadow-sm">
-                 <span className="text-sm font-medium text-slate-600">Chi phí gánh</span>
+                 <span className="text-sm font-medium text-slate-600">{t("expenseShare", { fallback: "Chi phí gánh" })}</span>
                  <span className="font-bold text-slate-900">{formatCurrency(totalOwed, { currency })}</span>
                </div>
                {/* 3 Xài lố */}
                {hasBudget && <div className="flex justify-between items-center p-3.5 bg-white border border-slate-200/70 rounded-xl shadow-sm">
-                 <span className="text-sm font-medium text-slate-600">Xài lố</span>
+                 <span className="text-sm font-medium text-slate-600">{t("overBudget", { fallback: "Xài lố" })}</span>
                  <span className="font-bold text-rose-600">{formatCurrency(overBudget, { currency })}</span>
                </div>}
                {/* 4 Dư ngân sách */}
                {hasBudget && <div className="flex justify-between items-center p-3.5 bg-white border border-slate-200/70 rounded-xl shadow-sm">
-                 <span className="text-sm font-medium text-slate-600">Dư ngân sách</span>
+                 <span className="text-sm font-medium text-slate-600">{t("surplusBudget", { fallback: "Dư ngân sách" })}</span>
                  <span className="font-bold text-emerald-600">{formatCurrency(surplusBudget, { currency })}</span>
                </div>}
                {/* 5 Nhận bù đắp */}
                {hasBudget && <div className="flex justify-between items-center p-3.5 bg-white border border-slate-200/70 rounded-xl shadow-sm">
-                 <span className="text-sm font-medium text-slate-600">Nhận bù đắp</span>
+                 <span className="text-sm font-medium text-slate-600">{t("receivedSubsidy", { fallback: "Nhận bù đắp" })}</span>
                  <span className="font-bold text-amber-600">{formatCurrency(subsidy, { currency })}</span>
                </div>}
                {/* 6 Cá nhân tự bù */}
                {hasBudget && <div className="flex justify-between items-center p-4 bg-indigo-50 border border-indigo-200 rounded-xl shadow-sm mt-1">
-                 <span className="text-sm font-bold text-indigo-900">Cá nhân tự bù</span>
+                 <span className="text-sm font-bold text-indigo-900">{t("selfFunded", { fallback: "Cá nhân tự bù" })}</span>
                  <span className="text-lg font-extrabold text-indigo-700">{formatCurrency(selfFunded, { currency })}</span>
                </div>}
                {/* 7 Ngân sách sử dụng */}
                {hasBudget && <div className="flex justify-between items-center p-3.5 bg-white border border-slate-200/70 rounded-xl shadow-sm">
-                 <span className="text-sm font-medium text-slate-600">Ngân sách sử dụng</span>
+                 <span className="text-sm font-medium text-slate-600">{t("usedBudget", { fallback: "Ngân sách sử dụng" })}</span>
                  <span className="font-bold text-slate-900">{formatCurrency(usedBudget, { currency })}</span>
                </div>}
                {/* 8 Đã ứng trước */}
                <div className="flex justify-between items-center p-3.5 bg-white border border-slate-200/70 rounded-xl shadow-sm">
-                 <span className="text-sm font-medium text-slate-600">Đã ứng trước</span>
+                 <span className="text-sm font-medium text-slate-600">{t("totalPaid", { fallback: "Đã ứng trước" })}</span>
                  <span className="font-bold text-slate-900">{formatCurrency(totalPaid, { currency })}</span>
                </div>
                {/* 9 Thực nhận / Đóng thêm */}
                <div className="flex justify-between items-center p-4 bg-emerald-50 border border-emerald-200 rounded-xl shadow-sm mt-1">
-                 <span className="text-sm font-bold text-emerald-900">Thực nhận / Đóng thêm</span>
+                 <span className="text-sm font-bold text-emerald-900">{t("netSettlement", { fallback: "Thực nhận / Đóng thêm" })}</span>
                  <span className={`text-xl font-extrabold tracking-tight ${netAmount < 0 ? "text-rose-600" : "text-emerald-700"}`}>
                    {netAmount > 0 ? "+" : ""}{formatCurrency(netAmount, { currency })}
                  </span>
@@ -180,7 +186,7 @@ export default function ParticipantDetailsModal({ open, onOpenChange, participan
                       <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-tight group-hover:text-blue-600 transition-colors">{ex.title}</h4>
                       <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-1">
                         <Calendar className="w-3.5 h-3.5" />
-                        <span>{new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(ex.expenseDate || ex.createdAt))}</span>
+                        <span>{new Intl.DateTimeFormat(dateLocale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(ex.expenseDate || ex.createdAt))}</span>
                       </div>
                     </div>
                   </div>
@@ -194,19 +200,21 @@ export default function ParticipantDetailsModal({ open, onOpenChange, participan
                 <div className="bg-slate-50 rounded-xl p-2.5 mt-1 border border-slate-100 flex flex-col gap-1.5">
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
                     <Users className="w-3.5 h-3.5" />
-                    <span>Thành viên tham gia ({ex.splits.length})</span>
+                    <span>{t("participatingMembers", { count: ex.splits.length, fallback: `Thành viên tham gia (${ex.splits.length})` })}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {ex.splits.map((s: any) => (
                       <span key={s.participantId} className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[11px] font-medium text-slate-600">
-                        {participantMap.get(s.participantId) || "Unknown"}
+                        {participantMap.get(s.participantId) || tCommon("anonymous", { fallback: "Unknown" })}
                       </span>
                     ))}
                   </div>
                 </div>
               </div>
             )) : (
-              <div className="text-center text-sm font-medium text-slate-400 py-10">Bạn không có khoản ứng trước nào.</div>
+              <div className="text-center text-sm font-medium text-slate-400 py-10">
+                {t("noPaidExpenses", { fallback: "Bạn không có khoản ứng trước nào." })}
+              </div>
             )
           )}
 
@@ -228,7 +236,7 @@ export default function ParticipantDetailsModal({ open, onOpenChange, participan
                         <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-tight group-hover:text-blue-600 transition-colors">{ex.title}</h4>
                         <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-1">
                           <Calendar className="w-3.5 h-3.5" />
-                          <span>{new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(ex.expenseDate || ex.createdAt))}</span>
+                          <span>{new Intl.DateTimeFormat(dateLocale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(ex.expenseDate || ex.createdAt))}</span>
                         </div>
                       </div>
                     </div>
@@ -236,7 +244,9 @@ export default function ParticipantDetailsModal({ open, onOpenChange, participan
                       <span className="font-extrabold text-rose-600 text-sm sm:text-base tracking-tight">
                         {formatCurrency(mySplit?.amount || 0, { currency: currency })}
                       </span>
-                      <span className="text-[10px] sm:text-xs font-semibold text-slate-400 mt-0.5">Phần phải gánh</span>
+                      <span className="text-[10px] sm:text-xs font-semibold text-slate-400 mt-0.5">
+                        {t("owedShare", { fallback: "Phần phải gánh" })}
+                      </span>
                     </div>
                   </div>
                   
@@ -244,13 +254,15 @@ export default function ParticipantDetailsModal({ open, onOpenChange, participan
                     <div className="flex items-center justify-between">
                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
                         <Users className="w-3.5 h-3.5" />
-                        <span>Tổng chi: <span className="font-bold text-slate-700">{formatCurrency(ex.amount, { currency: currency })}</span> ({ex.splits.length} người)</span>
+                        <span>
+                          {t("totalExpense", { fallback: "Tổng chi" })}: <span className="font-bold text-slate-700">{formatCurrency(ex.amount, { currency: currency })}</span> ({t("peopleCount", { count: ex.splits.length, fallback: `${ex.splits.length} người` })})
+                        </span>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {ex.splits.map((s: any) => (
                         <span key={s.participantId} className={`px-2 py-0.5 border rounded-md text-[11px] font-medium ${s.participantId === participant.id ? "bg-rose-50 border-rose-200 text-rose-700" : "bg-white border-slate-200 text-slate-600"}`}>
-                          {participantMap.get(s.participantId) || "Unknown"}
+                          {participantMap.get(s.participantId) || tCommon("anonymous", { fallback: "Unknown" })}
                         </span>
                       ))}
                     </div>
@@ -258,7 +270,9 @@ export default function ParticipantDetailsModal({ open, onOpenChange, participan
                 </div>
               );
             }) : (
-              <div className="text-center text-sm font-medium text-slate-400 py-10">Bạn chưa tham gia sự kiện nào.</div>
+              <div className="text-center text-sm font-medium text-slate-400 py-10">
+                {t("noOwedExpenses", { fallback: "Bạn chưa tham gia khoản chi nào." })}
+              </div>
             )
           )}
         </div>

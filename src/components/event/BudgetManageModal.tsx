@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { updateParticipantBudgets } from "@/actions/budget";
 import { formatCurrency } from "@/lib/utils";
-import { Loader2, Crown, UserCheck, ShieldCheck } from "lucide-react";
+import { Loader2, Crown, ShieldCheck } from "lucide-react";
 
 type BudgetMode = "FIXED" | "UNLIMITED" | "SELF_FUNDED";
 
@@ -188,10 +188,10 @@ export default function BudgetManageModal({
       <DialogContent className="sm:max-w-xl w-[95vw] rounded-3xl p-4 sm:p-6 max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900 text-center">
-            {tBudget("manageBudget") || "Quản lý Ngân sách / Đài thọ"}
+            {tBudget("manageBudget", { fallback: "Quản lý Ngân sách / Đài thọ" })}
           </DialogTitle>
           <p className="text-xs text-slate-500 text-center mt-0.5">
-            Cấu hình định mức đài thọ hoặc hỗ trợ theo thực phí cho từng thành viên.
+            {tBudget("manageModalDesc", { fallback: "Cấu hình định mức đài thọ hoặc hỗ trợ theo thực phí cho từng thành viên." })}
           </p>
         </DialogHeader>
 
@@ -200,12 +200,12 @@ export default function BudgetManageModal({
           {/* Mức ngân sách trung bình */}
           <div className="bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-200/80">
             <label className="text-xs font-semibold text-slate-600 block mb-1">
-              Mức ngân sách định mức / 1 phần
+              {tBudget("avgBudgetPerShare", { fallback: "Mức ngân sách định mức / 1 phần" })}
             </label>
             <Input
               type="text"
               inputMode="numeric"
-              placeholder="VD: 500,000"
+              placeholder={tBudget("avgBudgetPlaceholder", { fallback: "VD: 500,000" })}
               value={avgInput}
               onChange={handleAvgChange}
               className="rounded-xl h-10 bg-white border-slate-200 focus-visible:ring-indigo-500 text-base font-bold text-indigo-700"
@@ -241,7 +241,7 @@ export default function BudgetManageModal({
                             : "text-slate-500 hover:text-slate-900"
                         }`}
                       >
-                        Cố định
+                        {tBudget("modeFixed", { fallback: "Cố định" })}
                       </button>
                       <button
                         type="button"
@@ -253,7 +253,7 @@ export default function BudgetManageModal({
                         }`}
                       >
                         <Crown className="w-3 h-3" />
-                        Thực phí
+                        {tBudget("modeActual", { fallback: "Thực phí" })}
                       </button>
                       <button
                         type="button"
@@ -264,7 +264,7 @@ export default function BudgetManageModal({
                             : "text-slate-500 hover:text-slate-900"
                         }`}
                       >
-                        Tự túc
+                        {tBudget("modeSelfFunded", { fallback: "Tự túc" })}
                       </button>
                     </div>
                   </div>
@@ -274,7 +274,7 @@ export default function BudgetManageModal({
                     {currentMode === "FIXED" && (
                       <>
                         <span className="text-slate-400 font-medium">
-                          Hệ số: {originalWeight} phần
+                          {tBudget("weightShares", { weight: originalWeight, fallback: `Hệ số: ${originalWeight} phần` })}
                         </span>
                         <div className="flex items-center gap-1.5">
                           <Input
@@ -301,10 +301,10 @@ export default function BudgetManageModal({
                       <div className="w-full flex items-center justify-between text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200/60">
                         <span className="font-semibold flex items-center gap-1.5 text-xs">
                           <Crown className="w-3.5 h-3.5 text-amber-500" />
-                          Được đài thọ 100% chi phí thực tế
+                          {tBudget("unlimitedDesc", { fallback: "Được đài thọ 100% chi phí thực tế" })}
                         </span>
                         <span className="font-extrabold uppercase text-[10px] tracking-wider bg-amber-200/60 px-1.5 py-0.5 rounded-md">
-                          Thực tích
+                          {tBudget("actualBadge", { fallback: "Thực tích" })}
                         </span>
                       </div>
                     )}
@@ -313,7 +313,7 @@ export default function BudgetManageModal({
                       <div className="w-full flex items-center justify-between text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/60">
                         <span className="font-semibold flex items-center gap-1.5 text-xs">
                           <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-                          Tự chi trả toàn bộ phần chi tiêu
+                          {tBudget("selfFundedDesc", { fallback: "Tự chi trả toàn bộ phần chi tiêu" })}
                         </span>
                         <span className="font-bold text-xs">0 {baseCurrency}</span>
                       </div>
@@ -328,7 +328,7 @@ export default function BudgetManageModal({
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between p-3 bg-emerald-50/80 rounded-2xl border border-emerald-200/80">
               <span className="text-xs sm:text-sm font-semibold text-emerald-900">
-                Tổng ngân sách định mức cố định:
+                {tBudget("totalFixedBudget", { fallback: "Tổng ngân sách định mức cố định:" })}
               </span>
               <span className="text-sm sm:text-base font-extrabold text-emerald-700">
                 {formatCurrency(totalEstimatedBudget, { currency: baseCurrency })}
@@ -341,7 +341,7 @@ export default function BudgetManageModal({
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl h-11 font-semibold text-sm shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
             >
               {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              <span>{tCommon("save") || "Lưu thiết lập ngân sách"}</span>
+              <span>{tBudget("saveBudgetSettings", { fallback: "Lưu thiết lập ngân sách" })}</span>
             </Button>
           </div>
         </div>
