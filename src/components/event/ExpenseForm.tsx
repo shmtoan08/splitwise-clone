@@ -26,6 +26,7 @@ type Participant = {
   id: string;
   name: string;
   weight?: number;
+  remainderBurden?: number;
   deviceToken?: string | null;
 };
 
@@ -41,6 +42,7 @@ type InitialExpense = {
   exchangeRate?: any;
   splitMode?: "AMOUNT" | "SHARES";
   receiptUrl?: string | null;
+  surplus?: number;
   splits: { participantId: string; amount: number; shares?: number | null }[];
 };
 
@@ -62,13 +64,14 @@ type Props = {
   isReadOnly?: boolean;
   isCreator?: boolean;
   currentUserId?: string;
+  roundingMode?: "ROUND_ROBIN" | "ROUND_UP";
 };
 
 const POPULAR_CURRENCIES = ["VND", "JPY", "USD", "EUR", "SGD", "THB", "KRW"];
 
 type SplitMode = "AMOUNT" | "SHARES";
 
-export default function ExpenseForm({ eventId, participants, initialExpense, open, onOpenChange, currency, groups = [], expensesCount, isReadOnly = false, isCreator = false, currentUserId }: Props) {
+export default function ExpenseForm({ eventId, participants, initialExpense, open, onOpenChange, currency, groups = [], expensesCount, isReadOnly = false, isCreator = false, currentUserId, roundingMode = "ROUND_ROBIN" }: Props) {
   const t = useTranslations("expense");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -207,6 +210,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
   const [splits, setSplits] = useState<{ participantId: string; amount: number; shares?: number | null }[]>(
     initialExpense?.splits ?? []
   );
+  const [surplus, setSurplus] = useState<number>(initialExpense?.surplus ?? 0);
 
   const [isSplitValid, setIsSplitValid] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -256,6 +260,7 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
       manualExchangeRate: manualRate,
       expenseDate: new Date(expenseDateStr),
       receiptUrl,
+      surplus,
     };
 
     let res;
@@ -532,9 +537,13 @@ export default function ExpenseForm({ eventId, participants, initialExpense, ope
           originalCurrency={originalCurrency}
           groups={groups}
           isReadOnly={effectiveReadOnly}
-          onChange={(mode, newSplits) => {
+          roundingMode={roundingMode}
+          initialSurplus={initialExpense?.surplus ?? 0}
+          isCreator={isCreator}
+          onChange={(mode, newSplits, newSurplus) => {
             setActiveMode(mode);
             setSplits(newSplits);
+            setSurplus(newSurplus ?? 0);
           }}
           onValidityChange={setIsSplitValid}
         />

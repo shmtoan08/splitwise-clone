@@ -30,6 +30,7 @@ type Participant = {
   deviceToken?: string | null;
   weight?: number;
   familyConfig?: any;
+  remainderBurden?: number;
 };
 
 type Expense = {
@@ -46,6 +47,7 @@ type Expense = {
   exchangeRate?: any;
   splitMode?: "AMOUNT" | "SHARES";
   receiptUrl?: string | null;
+  surplus?: number;
   splits: { participantId: string; amount: number; shares?: number | null }[];
 };
 
@@ -64,10 +66,12 @@ type Props = {
   isLocked?: boolean;
   currentParticipantId?: string;
   isCreator?: boolean;
+  roundingMode?: "ROUND_ROBIN" | "ROUND_UP";
 };
 
-export default function ExpenseTab({ eventId, participants, expenses, currency, groups = [], isLocked = false, currentParticipantId, isCreator = false }: Props) {
+export default function ExpenseTab({ eventId, participants, expenses, currency, groups = [], isLocked = false, currentParticipantId, isCreator = false, roundingMode = "ROUND_ROBIN" }: Props) {
   const t = useTranslations("event");
+  const tRounding = useTranslations("rounding");
   const tExpense = useTranslations("expense");
   const tCommon = useTranslations("common");
   const { showAlert } = useAlert();
@@ -301,7 +305,7 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
                 cardStyle = "border-slate-200/80 bg-white shadow-sm hover:shadow-md hover:border-slate-300 cursor-pointer";
               }
               
-              // Tính tổng số phần và trung bình chi phí mỗi phần
+              // Tính tổng số phần và trung bình chi phí mỗi phần (tính theo số tiền thực đóng sau khi làm tròn lên tích vào quỹ)
               const totalShares = exp.splits.reduce((sum, s) => {
                 if (s.shares != null && s.shares > 0) {
                   return sum + s.shares;
@@ -311,7 +315,8 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
               }, 0);
 
               const formattedShares = Number.isInteger(totalShares) ? totalShares : Number(totalShares.toFixed(2));
-              const avgPerShare = totalShares > 0 ? Math.round(exp.amount / totalShares) : 0;
+              const effectiveAmount = exp.amount + (exp.surplus || 0);
+              const avgPerShare = totalShares > 0 ? Math.round(effectiveAmount / totalShares) : 0;
 
               return (
                 <li
@@ -377,10 +382,15 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
                           AUTO
                         </Badge>
                       ) : (
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-1.5">
+                        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium mt-1.5 flex-wrap">
                           <span>
                             {new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(exp.expenseDate || exp.createdAt))}
                           </span>
+                          {exp.surplus && exp.surplus > 0 && isCreator ? (
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80">
+                              +{formatCurrency(exp.surplus, { currency })} {tRounding("surplusBadge")}
+                            </span>
+                          ) : null}
                         </div>
                       )}
                     </div>
@@ -547,6 +557,7 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
           isReadOnly={!checkCanEdit(selectedExpense)}
           isCreator={isCreator}
           currentUserId={effectiveUserId}
+          roundingMode={roundingMode}
         />
       )}
 

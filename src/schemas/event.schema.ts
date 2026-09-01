@@ -10,6 +10,10 @@ export const createEventSchema = z.object({
     .string()
     .length(3, "Currency phải là mã ISO 4217 3 ký tự")
     .default("VND"),
+  roundingMode: z
+    .enum(["ROUND_ROBIN", "ROUND_UP"])
+    .default("ROUND_ROBIN")
+    .optional(),
 });
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
@@ -30,3 +34,11 @@ export const updateEventCurrencySchema = z.object({
 });
 
 export type UpdateEventCurrencyInput = z.infer<typeof updateEventCurrencySchema>;
+
+/** Schema cho action đổi roundingMode của Event */
+export const updateEventRoundingModeSchema = z.object({
+  eventId: z.string().uuid("eventId phải là UUID"),
+  roundingMode: z.enum(["ROUND_ROBIN", "ROUND_UP"]),
+});
+
+export type UpdateEventRoundingModeInput = z.infer<typeof updateEventRoundingModeSchema>;

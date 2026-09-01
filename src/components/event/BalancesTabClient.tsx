@@ -28,10 +28,15 @@ export default function BalancesTabClient({ event, isCreator }: Props) {
   const { id: eventId, isAdvancedMode, participants, expenses, baseCurrency } = event;
   const t = useTranslations("budget");
   const tCommon = useTranslations("common");
+  const tRounding = useTranslations("rounding");
   const { isCurrentParticipant, identity } = useParticipantIdentity(participants);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+
+  const totalSurplus = useMemo(() => {
+    return expenses.reduce((sum: number, ex: any) => sum + (ex.surplus || 0), 0);
+  }, [expenses]);
 
   // Tự động bật checkbox nếu trong DB đã tồn tại khoản chi bù đắp chéo
   const [autoApply, setAutoApply] = useState(() => expenses.some((ex: any) => ex.isCrossSubsidy));
@@ -305,6 +310,26 @@ export default function BalancesTabClient({ event, isCreator }: Props) {
 
       {/* --- NỘI DUNG CHÍNH --- */}
       <div className="flex-1 overflow-y-auto scrollbar-hide px-3 sm:px-6 py-4 pb-6 lg:pb-12 w-full max-w-5xl mx-auto space-y-3 sm:space-y-4">
+
+        {/* === CARD QUỸ DƯ SỰ KIỆN (NẾU CÓ SURPLUS > 0 VÀ LÀ CREATOR) === */}
+        {isCreator && totalSurplus > 0 && (
+          <div className="bg-gradient-to-r from-amber-500/10 via-amber-400/15 to-orange-400/10 border-2 border-amber-300/80 rounded-2xl p-4 sm:p-4.5 shadow-sm space-y-1.5 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">💎</span>
+                <h4 className="font-bold text-amber-950 text-sm sm:text-base">
+                  {tRounding("surplusFundTitle", { fallback: "Quỹ dư sự kiện" })}
+                </h4>
+              </div>
+              <span className="font-extrabold text-amber-900 text-base sm:text-lg">
+                +{formatCurrency(totalSurplus, { currency: baseCurrency })}
+              </span>
+            </div>
+            <p className="text-xs text-amber-900/80 leading-relaxed font-medium pl-7">
+              {tRounding("surplusFundDesc", { fallback: "Tiền dôi ra từ các lần làm tròn lên. Người đại diện có thể tùy ý sử dụng bù phí chuyển khoản hoặc chi phí chung." })}
+            </p>
+          </div>
+        )}
 
         <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-2">
           <div className="flex flex-col gap-2.5">

@@ -92,13 +92,13 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
     return { success: false, error: `Dữ liệu không hợp lệ: ${errors}` };
   }
 
-  const { eventId, title, amount, payerId, splitConfig, originalCurrency, manualExchangeRate, expenseDate, receiptUrl } = parsed.data;
+  const { eventId, title, amount, payerId, splitConfig, originalCurrency, manualExchangeRate, expenseDate, receiptUrl, surplus: inputSurplus } = parsed.data;
 
   try {
-    // 1. Lấy baseCurrency của event
+    // 1. Lấy baseCurrency & roundingMode của event
     const eventRecord = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { baseCurrency: true, isLocked: true },
+      select: { baseCurrency: true, isLocked: true, roundingMode: true },
     });
     if (!eventRecord) {
       return { success: false, error: "Sự kiện không tồn tại." };
@@ -107,6 +107,7 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
       return { success: false, error: "Sự kiện đã bị khóa, không thể thêm chi tiêu mới." };
     }
     const baseCurrency = eventRecord.baseCurrency;
+    const roundingMode = eventRecord.roundingMode;
 
     // 2. Resolve tỷ giá nếu có originalCurrency
     let snapshotRate: number | null = null;
@@ -122,9 +123,24 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
       finalAmount = Math.round(amount * snapshotRate);
     }
 
-    // 3. Tính splits dựa trên finalAmount
-    let calculatedSplits: Array<{ participantId: string; amount: number; shares: number | null }> = [];
-    let participantIds: string[] = [];
+    // 3. Lấy thông tin participants (để lấy remainderBurden cho thuật toán ROUND_ROBIN)
+    const rawParticipantIds = splitConfig.splits.map((s) => s.participantId);
+    const uniqueParticipantIds = Array.from(new Set([payerId, ...rawParticipantIds]));
+    const dbParticipants = await prisma.participant.findMany({
+      where: { eventId, id: { in: uniqueParticipantIds } },
+      select: { id: true, remainderBurden: true },
+    });
+
+    if (dbParticipants.length !== uniqueParticipantIds.length) {
+      return { success: false, error: "Một số thành viên không thuộc nhóm này." };
+    }
+
+    const burdenMap = new Map(dbParticipants.map((p) => [p.id, p.remainderBurden]));
+
+    // 4. Tính splits & surplus dựa trên finalAmount và roundingMode
+    let calculatedSplits: Array<{ participantId: string; amount: number; shares: number | null; isExtra?: boolean }> = [];
+    let calculatedSurplus = 0;
+    let extraParticipantIds: string[] = [];
 
     if (splitConfig.mode === "AMOUNT") {
       calculatedSplits = splitConfig.splits.map((s) => ({
@@ -132,29 +148,24 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
         amount: Math.round(s.amount * (snapshotRate || 1)),
         shares: null,
       }));
-      participantIds = splitConfig.splits.map((s) => s.participantId);
+      calculatedSurplus = inputSurplus ?? 0;
     } else if (splitConfig.mode === "SHARES") {
-      // Cast safely since we know shares must exist in SHARES mode
-      const rawResults = splitByShares(finalAmount, splitConfig.splits as { participantId: string; shares: number }[]);
-      calculatedSplits = rawResults.map((r) => ({
-        ...r,
-        shares: splitConfig.splits.find(s => s.participantId === r.participantId)?.shares ?? null,
+      const shareInputs = splitConfig.splits.map((s) => ({
+        participantId: s.participantId,
+        shares: s.shares as number,
+        remainderBurden: burdenMap.get(s.participantId) ?? 0,
       }));
-      participantIds = splitConfig.splits.map((s) => s.participantId);
+
+      const rawResults = splitByShares(finalAmount, shareInputs, roundingMode);
+      calculatedSplits = rawResults.splits.map((r) => ({
+        ...r,
+        shares: splitConfig.splits.find((s) => s.participantId === r.participantId)?.shares ?? null,
+      }));
+      calculatedSurplus = rawResults.surplus;
+      extraParticipantIds = rawResults.splits.filter((s) => s.isExtra).map((s) => s.participantId);
     }
 
-    validateSplitSum(finalAmount, calculatedSplits);
-
-    // 4. Validate participants thuộc event
-    const uniqueParticipantIds = Array.from(new Set([payerId, ...participantIds]));
-    const dbParticipants = await prisma.participant.findMany({
-      where: { eventId, id: { in: uniqueParticipantIds } },
-      select: { id: true },
-    });
-
-    if (dbParticipants.length !== uniqueParticipantIds.length) {
-      return { success: false, error: "Một số thành viên không thuộc nhóm này." };
-    }
+    validateSplitSum(finalAmount, calculatedSplits, calculatedSurplus);
 
     // 5. Lấy createdById từ cookie
     const cookieStore = await cookies();
@@ -177,7 +188,7 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
 
     let createdExpenseId: string | null = null;
 
-    // 6. Tạo Expense + Splits trong transaction
+    // 6. Tạo Expense + Splits + Cập nhật remainderBurden trong transaction
     await prisma.$transaction(async (tx) => {
       const expense = await tx.expense.create({
         data: {
@@ -188,12 +199,12 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
           createdById,
           version: 1,
           originalCurrency: originalCurrency ?? null,
-          // Dùng Prisma.Decimal để tránh Float precision
           exchangeRate: snapshotRate !== null ? new Prisma.Decimal(snapshotRate) : null,
           isCrossSubsidy: false,
           expenseDate: expenseDate ?? new Date(),
           splitMode: splitConfig.mode as any,
           receiptUrl: receiptUrl ?? null,
+          surplus: calculatedSurplus,
         },
       });
       createdExpenseId = expense.id;
@@ -206,6 +217,14 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
           shares: (split as any).shares ?? null,
         })),
       });
+
+      // Nếu chia theo ROUND_ROBIN, ghi nhận tăng remainderBurden cho những người vừa gánh +1
+      if (roundingMode === "ROUND_ROBIN" && extraParticipantIds.length > 0) {
+        await tx.participant.updateMany({
+          where: { id: { in: extraParticipantIds } },
+          data: { remainderBurden: { increment: 1 } },
+        });
+      }
     });
 
     if (createdExpenseId && receiptUrl && receiptUrl.includes("expense_tmp_")) {
@@ -217,7 +236,7 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
           const freshUrl = `${renameRes.secure_url}?t=${Date.now()}`;
           await prisma.expense.update({
             where: { id: createdExpenseId },
-            data: { receiptUrl: freshUrl }
+            data: { receiptUrl: freshUrl },
           });
         } catch (err) {
           console.error("Lỗi rename cloudinary:", err);
@@ -240,13 +259,13 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
     return { success: false, error: `Dữ liệu không hợp lệ: ${errors}` };
   }
 
-  const { id, eventId, title, amount, payerId, splitConfig, currentVersion, originalCurrency, manualExchangeRate, expenseDate, receiptUrl } = parsed.data;
+  const { id, eventId, title, amount, payerId, splitConfig, currentVersion, originalCurrency, manualExchangeRate, expenseDate, receiptUrl, surplus: inputSurplus } = parsed.data;
 
   try {
     // 1. Lấy bản ghi expense cũ (để kiểm tra originalCurrency đã lưu và receiptUrl)
     const [eventRecord, existingExpense] = await Promise.all([
-      prisma.event.findUnique({ where: { id: eventId }, select: { baseCurrency: true, isLocked: true, creatorDeviceToken: true } }),
-      prisma.expense.findUnique({ where: { id }, select: { originalCurrency: true, exchangeRate: true, receiptUrl: true, createdById: true, payerId: true } }),
+      prisma.event.findUnique({ where: { id: eventId }, select: { baseCurrency: true, isLocked: true, creatorDeviceToken: true, roundingMode: true } }),
+      prisma.expense.findUnique({ where: { id }, select: { originalCurrency: true, exchangeRate: true, receiptUrl: true, createdById: true, payerId: true, surplus: true } }),
     ]);
 
     if (!eventRecord) return { success: false, error: "Sự kiện không tồn tại." };
@@ -254,9 +273,9 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
     if (!existingExpense) return { success: false, error: "Khoản chi không tồn tại." };
 
     const baseCurrency = eventRecord.baseCurrency;
+    const roundingMode = eventRecord.roundingMode;
 
     // 2. Resolve tỷ giá
-    // Nếu originalCurrency không đổi → GIỮ NGUYÊN exchangeRate đã snapshot, không gọi lại API
     let snapshotRate: Prisma.Decimal | null = existingExpense.exchangeRate;
     let finalAmount = amount;
 
@@ -264,7 +283,6 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
 
     if (originalCurrency && originalCurrency !== baseCurrency) {
       if (currencyChanged) {
-        // originalCurrency bị đổi → cần lấy tỷ giá mới
         const resolved = await resolveExchangeRate(originalCurrency, baseCurrency, manualExchangeRate);
         if (resolved.needsManualRate) {
           return { success: false, error: `EXCHANGE_RATE_UNAVAILABLE:${resolved.message}` };
@@ -272,17 +290,31 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
         snapshotRate = new Prisma.Decimal(resolved.rate);
         finalAmount = Math.round(amount * resolved.rate);
       } else {
-        // Giữ nguyên exchangeRate — chỉ tính lại amount theo rate cũ
         const rate = existingExpense.exchangeRate?.toNumber() ?? 1;
         finalAmount = Math.round(amount * rate);
       }
     } else {
-      // Không có originalCurrency hoặc giống baseCurrency
       snapshotRate = null;
     }
 
-    // 3. Tính splits
+    // 3. Validate participants & lấy remainderBurden
+    const rawParticipantIds = splitConfig.splits.map((s) => s.participantId);
+    const uniqueParticipantIds = Array.from(new Set([payerId, ...rawParticipantIds]));
+    const dbParticipants = await prisma.participant.findMany({
+      where: { eventId, id: { in: uniqueParticipantIds } },
+      select: { id: true, remainderBurden: true },
+    });
+
+    if (dbParticipants.length !== uniqueParticipantIds.length) {
+      return { success: false, error: "Một số thành viên không thuộc nhóm này." };
+    }
+
+    const burdenMap = new Map(dbParticipants.map((p) => [p.id, p.remainderBurden]));
+
+    // 4. Tính splits & surplus
     let calculatedSplits: Array<{ participantId: string; amount: number; shares: number | null }> = [];
+    let calculatedSurplus = 0;
+
     if (splitConfig.mode === "AMOUNT") {
       const rate = snapshotRate ? snapshotRate.toNumber() : (existingExpense.exchangeRate?.toNumber() ?? 1);
       calculatedSplits = splitConfig.splits.map((s) => ({
@@ -290,26 +322,23 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
         amount: Math.round(s.amount * rate),
         shares: null,
       }));
+      calculatedSurplus = inputSurplus ?? 0;
     } else if (splitConfig.mode === "SHARES") {
-      const rawResults = splitByShares(finalAmount, splitConfig.splits as { participantId: string; shares: number }[]);
-      calculatedSplits = rawResults.map((r) => ({
-        ...r,
-        shares: splitConfig.splits.find(s => s.participantId === r.participantId)?.shares ?? null,
+      const shareInputs = splitConfig.splits.map((s) => ({
+        participantId: s.participantId,
+        shares: s.shares as number,
+        remainderBurden: burdenMap.get(s.participantId) ?? 0,
       }));
+
+      const rawResults = splitByShares(finalAmount, shareInputs, roundingMode);
+      calculatedSplits = rawResults.splits.map((r) => ({
+        ...r,
+        shares: splitConfig.splits.find((s) => s.participantId === r.participantId)?.shares ?? null,
+      }));
+      calculatedSurplus = rawResults.surplus;
     }
 
-    validateSplitSum(finalAmount, calculatedSplits);
-
-    // 4. Validate participants
-    const uniqueParticipantIds = Array.from(new Set([payerId, ...calculatedSplits.map(s => s.participantId)]));
-    const dbParticipants = await prisma.participant.findMany({
-      where: { eventId, id: { in: uniqueParticipantIds } },
-      select: { id: true },
-    });
-
-    if (dbParticipants.length !== uniqueParticipantIds.length) {
-      return { success: false, error: "Một số thành viên không thuộc nhóm này." };
-    }
+    validateSplitSum(finalAmount, calculatedSplits, calculatedSurplus);
 
     // 5. Xác nhận danh tính & quyền chỉnh sửa
     const cookieStore = await cookies();
@@ -344,11 +373,12 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
           expenseDate: expenseDate ?? new Date(),
           splitMode: splitConfig.mode as any,
           receiptUrl: receiptUrl ?? null,
+          surplus: calculatedSurplus,
         },
       });
 
       await tx.expenseSplit.createMany({
-        data: calculatedSplits.map(split => ({
+        data: calculatedSplits.map((split) => ({
           expenseId: updatedExpense.id,
           participantId: split.participantId,
           amount: split.amount,

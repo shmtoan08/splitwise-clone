@@ -300,6 +300,7 @@
     "success": "成功",
     "unauthorized": "権限がありません。",
     "loading": "読み込み中...",
+    "processing": "処理中...",
     "error": "エラーが発生しました",
     "notFound": "見つかりません",
     "back": "戻る",
@@ -440,5 +441,29 @@
     "csvAmountCol": "金額",
     "csvToCol": "受け取る人",
     "csvStatusCol": "状態"
+  },
+  "rounding": {
+    "roundingMode": "端数処理ルール",
+    "roundRobin": "順番に端数負担 (デフォルト)",
+    "roundRobinDesc": "合計金額を厳密に配分し、1〜2円の端数をメンバー間で自動的にローテーションします。",
+    "roundUp": "切り上げ（均等化）",
+    "roundUpDesc": "全員が完全に同額を負担し、端数の余剰金はイベントの余剰金プールにプールされます。",
+    "surplusFundTitle": "イベント余剰資金プール",
+    "surplusFundDesc": "切り上げ計算によって発生した余剰金です。送金手数料の補填や共通経費として自由に利用できます。",
+    "surplusBadge": "余剰金プールへ",
+    "surplusHint": "余剰金プールへの加算: +{surplus} {currency}",
+    "extraBurdenHint": "(+{amount})",
+    "saveSuccess": "端数処理ルールを保存しました！",
+    "settingButtonTooltip": "端数処理の設定",
+    "settingButton": "端数処理",
+    "currentlySelected": "選択中"
+  },
+  "settings": {
+    "title": "イベント設定",
+    "button": "設定",
+    "advancedSectionTitle": "アドバンスドモード",
+    "advancedSectionDesc": "メンバーごとの予算管理と、精算時の自動相殺（クロス補填）機能を有効にします。",
+    "roundingSectionTitle": "端数処理ルール",
+    "saveSuccess": "設定を保存しました！"
   }
 }

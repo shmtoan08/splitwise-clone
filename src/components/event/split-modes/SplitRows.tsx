@@ -13,6 +13,7 @@ type Participant = {
   id: string;
   name: string;
   weight?: number;
+  remainderBurden?: number;
 };
 
 type Group = {
@@ -35,9 +36,12 @@ type Props = {
   currency: string;
   originalCurrency?: string;
   groups?: Group[];
-  onChange: (mode: "AMOUNT" | "SHARES", splits: SplitItem[]) => void;
+  onChange: (mode: "AMOUNT" | "SHARES", splits: SplitItem[], surplus?: number) => void;
   onValidityChange: (valid: boolean) => void;
   isReadOnly?: boolean;
+  roundingMode?: "ROUND_ROBIN" | "ROUND_UP";
+  initialSurplus?: number;
+  isCreator?: boolean;
 };
 
 export default function SplitRows({
@@ -51,8 +55,12 @@ export default function SplitRows({
   onChange,
   onValidityChange,
   isReadOnly = false,
+  roundingMode = "ROUND_ROBIN",
+  initialSurplus = 0,
+  isCreator = false,
 }: Props) {
   const t = useTranslations("expense");
+  const tRounding = useTranslations("rounding");
   const displayCurrency = originalCurrency ?? currency;
 
   // Sort participants so checked ones are at the top initially
@@ -102,28 +110,75 @@ export default function SplitRows({
     return map;
   });
 
+  const [extraIds, setExtraIds] = useState<Set<string>>(new Set());
+  const [surplus, setSurplus] = useState<number>(initialSurplus);
+
   const [isCustomized, setIsCustomized] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   // ─── Recalculate helpers ──────────────────────────────────────────────────
-  const recalculateAmounts = useCallback((currentMode: "AMOUNT" | "SHARES", currentSelectedIds: Set<string>, currentSharesMap: Record<string, number>) => {
+  const recalculateAmounts = useCallback((
+    currentMode: "AMOUNT" | "SHARES", 
+    currentSelectedIds: Set<string>, 
+    currentSharesMap: Record<string, number>
+  ) => {
     const idsArray = Array.from(currentSelectedIds);
-    if (idsArray.length === 0 || totalAmount <= 0) return {};
+    if (idsArray.length === 0 || totalAmount <= 0) {
+      setExtraIds(new Set());
+      setSurplus(0);
+      return {};
+    }
 
     if (currentMode === "SHARES") {
-      const inputs = idsArray.map(id => ({ participantId: id, shares: currentSharesMap[id] ?? 0 })).filter(i => i.shares > 0);
-      if (inputs.length === 0) return {};
-      const results = splitByShares(totalAmount, inputs);
+      const inputs = idsArray
+        .map(id => {
+          const p = participants.find(part => part.id === id);
+          return {
+            participantId: id,
+            shares: currentSharesMap[id] ?? 0,
+            remainderBurden: p?.remainderBurden ?? 0,
+          };
+        })
+        .filter(i => i.shares > 0);
+
+      if (inputs.length === 0) {
+        setExtraIds(new Set());
+        setSurplus(0);
+        return {};
+      }
+
+      const results = splitByShares(totalAmount, inputs, roundingMode);
       const newMap: Record<string, number> = {};
-      for (const r of results) newMap[r.participantId] = r.amount;
+      const newExtraIds = new Set<string>();
+
+      for (const r of results.splits) {
+        newMap[r.participantId] = r.amount;
+        if (r.isExtra) newExtraIds.add(r.participantId);
+      }
+
+      setExtraIds(newExtraIds);
+      setSurplus(results.surplus);
       return newMap;
     } else {
-      const results = splitEvenly(totalAmount, idsArray);
+      const inputs = idsArray.map(id => {
+        const p = participants.find(part => part.id === id);
+        return { id, remainderBurden: p?.remainderBurden ?? 0 };
+      });
+
+      const results = splitEvenly(totalAmount, inputs, roundingMode);
       const newMap: Record<string, number> = {};
-      for (const r of results) newMap[r.participantId] = r.amount;
+      const newExtraIds = new Set<string>();
+
+      for (const r of results.splits) {
+        newMap[r.participantId] = r.amount;
+        if (r.isExtra) newExtraIds.add(r.participantId);
+      }
+
+      setExtraIds(newExtraIds);
+      setSurplus(results.surplus);
       return newMap;
     }
-  }, [totalAmount]);
+  }, [totalAmount, participants, roundingMode]);
 
   const hasInitialized = useRef(false);
   const prevTotalAmount = useRef(totalAmount);
@@ -177,17 +232,17 @@ export default function SplitRows({
       };
     });
 
-    onChangeRef.current(activeMode, splits);
+    onChangeRef.current(activeMode, splits, surplus);
 
     let valid = idsArray.length > 0;
     if (activeMode === "SHARES") {
       const totalShares = idsArray.reduce((acc, id) => acc + (sharesMap[id] ?? 0), 0);
       valid = valid && totalShares > 0;
     } else {
-      valid = valid && sum === totalAmount;
+      valid = valid && sum === totalAmount + (surplus || 0);
     }
     onValidityChangeRef.current(valid);
-  }, [selectedIds, amountMap, sharesMap, activeMode, totalAmount]);
+  }, [selectedIds, amountMap, sharesMap, activeMode, totalAmount, surplus]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
   const isAllSelected = selectedIds.size === participants.length && participants.length > 0;
@@ -554,7 +609,12 @@ export default function SplitRows({
                   )}
 
                   <div className="h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl flex items-center justify-end font-bold text-xs sm:text-sm text-blue-600 bg-blue-50/60 border border-blue-100">
-                    {amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}
+                    <span>{amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}</span>
+                    {roundingMode === "ROUND_ROBIN" && extraIds.has(p.id) && amountVal > 0 && (
+                      <span className="text-[10px] text-slate-400 font-normal ml-1" title={tRounding("roundRobin")}>
+                        (+1{displayCurrency === "JPY" ? "¥" : ""})
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -622,7 +682,7 @@ export default function SplitRows({
                 <div className="text-slate-300 font-medium text-xs sm:text-sm px-0.5">x</div>
 
                 {/* Ô Số tiền */}
-                <div className="w-[6rem] sm:w-[7rem] relative">
+                <div className="w-[6rem] sm:w-[7.5rem] relative">
                   {isSelected && activeMode === "AMOUNT" ? (
                     <Input
                       type="text"
@@ -633,8 +693,13 @@ export default function SplitRows({
                       placeholder="0"
                     />
                   ) : (
-                    <div className={`w-full h-10 rounded-xl flex items-center justify-end font-bold text-sm sm:text-sm px-2 ${isSelected ? 'text-slate-400 bg-slate-50 border border-slate-200/50 truncate' : 'text-slate-400 truncate'}`}>
-                      {amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}
+                    <div className={`w-full h-10 rounded-xl flex items-center justify-end font-bold text-sm sm:text-sm px-2 ${isSelected ? 'text-slate-700 bg-slate-50 border border-slate-200/50 truncate' : 'text-slate-400 truncate'}`}>
+                      <span>{amountVal === 0 ? "-" : formatCurrency(amountVal, { currency: displayCurrency })}</span>
+                      {roundingMode === "ROUND_ROBIN" && extraIds.has(p.id) && amountVal > 0 && (
+                        <span className="text-[10px] text-slate-400 font-normal ml-1" title={tRounding("roundRobin")}>
+                          (+1{displayCurrency === "JPY" ? "¥" : ""})
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -643,6 +708,19 @@ export default function SplitRows({
           );
         })}
       </div>
+
+      {/* Chú thích tiền dư vào quỹ khi chia ROUND_UP (chỉ hiển thị cho Creator) */}
+      {surplus > 0 && isCreator && (
+        <div className="mx-1 mb-2 px-3.5 py-2.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 flex items-center justify-between text-xs text-amber-900 animate-in fade-in">
+          <div className="flex items-center gap-1.5 font-medium">
+            <span>✨</span>
+            <span>{tRounding("surplusBadge")}:</span>
+          </div>
+          <span className="font-bold text-amber-800">
+            +{formatCurrency(surplus, { currency: displayCurrency })}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

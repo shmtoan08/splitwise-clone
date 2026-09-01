@@ -13,10 +13,20 @@
 // Types
 // ---------------------------------------------------------------------------
 
+export type RoundingModeType = "ROUND_ROBIN" | "ROUND_UP";
+
 export type SplitResult = {
   participantId: string;
   /** Số tiền participant phải chịu — đơn vị đồng (Int) */
   amount: number;
+  /** Đánh dấu người nhận thêm +1 đơn vị tiền lẻ trong ROUND_ROBIN */
+  isExtra?: boolean;
+};
+
+export type SplitCalculationResult = {
+  splits: SplitResult[];
+  /** Số tiền dôi ra khi chia theo ROUND_UP (tích lũy vào Quỹ dư sự kiện) */
+  surplus: number;
 };
 
 export type Balance = {
@@ -35,49 +45,72 @@ export type DebtTransaction = {
 };
 
 // ---------------------------------------------------------------------------
-// splitEvenly — Chia đều có xử lý phần dư
+// splitEvenly — Chia đều có xử lý phần dư (ROUND_ROBIN / ROUND_UP)
 // ---------------------------------------------------------------------------
 
+export type EvenParticipantInput = 
+  | string 
+  | { id: string; remainderBurden?: number };
+
 /**
- * Chia `totalAmount` đều cho `participantIds`, xử lý phần dư (remainder)
- * bằng cách phân bổ thêm 1 đồng vào các participant đầu tiên trong danh sách.
- *
- * Đảm bảo: sum(result[i].amount) === totalAmount (luôn đúng, không có sai số)
- *
- * @example
- * splitEvenly(100000, ["A", "B", "C"])
- * // → [{ participantId: "A", amount: 33334 },
- * //    { participantId: "B", amount: 33333 },
- * //    { participantId: "C", amount: 33333 }]
- *
- * @example
- * splitEvenly(200000, ["A", "B"])
- * // → [{ participantId: "A", amount: 100000 },
- * //    { participantId: "B", amount: 100000 }]
+ * Chia `totalAmount` đều cho danh sách người tham gia theo chế độ làm tròn:
+ * - ROUND_ROBIN (Gánh luân phiên - Mặc định): Tổng splits khớp 100% bill. Ưu tiên người có remainderBurden thấp nhất nhận +1.
+ * - ROUND_UP (Làm tròn lên cào bằng): Math.ceil cho mọi người, tiền dôi ra tính vào `surplus`.
  */
 export function splitEvenly(
   totalAmount: number,
-  participantIds: string[]
-): SplitResult[] {
-  // Spec: trả về [] thay vì throw khi input rỗng hoặc không hợp lệ
-  if (participantIds.length === 0 || totalAmount <= 0) {
-    return [];
+  participants: EvenParticipantInput[],
+  mode: RoundingModeType = "ROUND_ROBIN"
+): SplitCalculationResult {
+  const normalized = participants.map((p) => {
+    if (typeof p === "string") {
+      return { id: p, remainderBurden: 0 };
+    }
+    return { id: p.id, remainderBurden: p.remainderBurden ?? 0 };
+  });
+
+  if (normalized.length === 0 || totalAmount <= 0) {
+    return {
+      splits: normalized.map((p) => ({ participantId: p.id, amount: 0, isExtra: false })),
+      surplus: 0,
+    };
   }
 
-  const n = participantIds.length;
-  const base = Math.floor(totalAmount / n);
-  // Số người nhận thêm 1 đồng phần dư
-  const remainder = totalAmount - base * n;
+  const n = normalized.length;
 
-  const result = participantIds.map((id, index) => ({
-    participantId: id,
-    // index < remainder: người đầu nhận thêm 1 đồng lẻ
-    amount: index < remainder ? base + 1 : base,
+  if (mode === "ROUND_UP") {
+    const perPerson = Math.ceil(totalAmount / n);
+    const totalCollected = perPerson * n;
+    const surplus = totalCollected - totalAmount;
+
+    const splits = normalized.map((p) => ({
+      participantId: p.id,
+      amount: perPerson,
+      isExtra: false,
+    }));
+
+    validateSplitSum(totalAmount, splits, surplus);
+    return { splits, surplus };
+  }
+
+  // Chế độ ROUND_ROBIN (Mặc định)
+  const base = Math.floor(totalAmount / n);
+  const leftover = totalAmount - base * n;
+
+  // Sắp xếp ưu tiên: người có remainderBurden nhỏ nhất được ưu tiên gánh trước
+  const ranked = [...normalized].sort(
+    (a, b) => a.remainderBurden - b.remainderBurden || a.id.localeCompare(b.id)
+  );
+  const extraIds = new Set(ranked.slice(0, leftover).map((p) => p.id));
+
+  const splits = normalized.map((p) => ({
+    participantId: p.id,
+    amount: extraIds.has(p.id) ? base + 1 : base,
+    isExtra: extraIds.has(p.id),
   }));
 
-  validateSplitSum(totalAmount, result);
-
-  return result;
+  validateSplitSum(totalAmount, splits, 0);
+  return { splits, surplus: 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -88,57 +121,79 @@ export type ShareInput = {
   participantId: string;
   /** Số phần (shares) participant này nhận. Có thể là số thập phân dương (VD: 1.5, 2.0). */
   shares: number;
+  /** Tổng số lần đã gánh tiền lẻ trong lịch sử */
+  remainderBurden?: number;
 };
 
 /**
- * Chia `totalAmount` theo tỷ lệ shares, xử lý phần dư tương tự splitEvenly.
- *
- * @example
- * splitByShares(300000, [
- *   { participantId: "A", shares: 2 },
- *   { participantId: "B", shares: 1 },
- * ])
- * // → A: 200000, B: 100000
- *
- * @example
- * splitByShares(100000, [
- *   { participantId: "A", shares: 2 },
- *   { participantId: "B", shares: 1 },
- * ])
- * // → A: 66667, B: 33333
+ * Chia `totalAmount` theo tỷ lệ shares:
+ * - ROUND_ROBIN: Phân bổ phần lẻ cho người có phần thập phân lớn nhất -> remainderBurden nhỏ nhất.
+ * - ROUND_UP: Math.ceil cho từng người, tổng chênh lệch ghi nhận vào surplus.
  */
 export function splitByShares(
   totalAmount: number,
-  participants: ShareInput[]
-): SplitResult[] {
+  participants: ShareInput[],
+  mode: RoundingModeType = "ROUND_ROBIN"
+): SplitCalculationResult {
   const totalShares = participants.reduce((sum, p) => sum + p.shares, 0);
-  // Spec: trả về array map amount=0 thay vì [] nếu rỗng hoặc totalShares <= 0 để giữ đúng length của input
-  if (participants.length === 0 || totalShares <= 0) {
-    return participants.map((p) => ({ participantId: p.participantId, amount: 0 }));
+  if (participants.length === 0 || totalShares <= 0 || totalAmount <= 0) {
+    return {
+      splits: participants.map((p) => ({ participantId: p.participantId, amount: 0, isExtra: false })),
+      surplus: 0,
+    };
   }
 
+  if (mode === "ROUND_UP") {
+    const raw = participants.map((p) => {
+      const exact = (totalAmount * p.shares) / totalShares;
+      const ceil = Math.ceil(exact);
+      return { participantId: p.participantId, amount: ceil, isExtra: false };
+    });
+
+    const totalCollected = raw.reduce((s, r) => s + r.amount, 0);
+    const surplus = totalCollected - totalAmount;
+
+    const splits = raw.map((r) => ({
+      participantId: r.participantId,
+      amount: r.amount,
+      isExtra: false,
+    }));
+
+    validateSplitSum(totalAmount, splits, surplus);
+    return { splits, surplus };
+  }
+
+  // Chế độ ROUND_ROBIN
   const raw = participants.map((i) => {
     const exact = (totalAmount * i.shares) / totalShares;
     const floor = Math.floor(exact);
-    return { participantId: i.participantId, floor, remainder: exact - floor };
+    return { 
+      participantId: i.participantId, 
+      floor, 
+      remainder: exact - floor,
+      remainderBurden: i.remainderBurden ?? 0,
+    };
   });
 
   const allocated = raw.reduce((s, r) => s + r.floor, 0);
   const leftover = totalAmount - allocated;
 
   const ranked = [...raw].sort(
-    (a, b) => b.remainder - a.remainder || a.participantId.localeCompare(b.participantId)
+    (a, b) => 
+      b.remainder - a.remainder || 
+      a.remainderBurden - b.remainderBurden || 
+      a.participantId.localeCompare(b.participantId)
   );
   const bonusIds = new Set(ranked.slice(0, leftover).map((r) => r.participantId));
 
-  const result = raw.map((r) => ({
+  const splits = raw.map((r) => ({
     participantId: r.participantId,
     amount: r.floor + (bonusIds.has(r.participantId) ? 1 : 0),
+    isExtra: bonusIds.has(r.participantId),
   }));
 
-  validateSplitSum(totalAmount, result);
-
-  return result;
+  validateSplitSum(totalAmount, splits, 0);
+  return { splits, surplus: 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -302,17 +357,18 @@ export function simplifyDebts(balances: Balance[]): DebtTransaction[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Validate tổng splits có khớp với totalAmount không.
+ * Validate tổng splits có khớp với totalAmount (+ surplus nếu ROUND_UP) không.
  * Ném lỗi nếu không khớp — phải gọi trước khi lưu vào DB.
  */
 export function validateSplitSum(
   totalAmount: number,
-  splits: Array<{ amount: number }>
+  splits: Array<{ amount: number }>,
+  surplus: number = 0
 ): void {
   const sum = splits.reduce((acc, s) => acc + s.amount, 0);
-  if (sum !== totalAmount) {
+  if (sum !== totalAmount + surplus) {
     throw new Error(
-      `Tổng các phần chia (${sum}đ) không khớp với số tiền khoản chi (${totalAmount}đ).`
+      `Tổng các phần chia (${sum}đ) không khớp với số tiền khoản chi (${totalAmount}đ + dư ${surplus}đ).`
     );
   }
 }

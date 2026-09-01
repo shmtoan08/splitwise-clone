@@ -15,20 +15,27 @@ datasource db {
 // ---------------------------------------------------------------------------
 // Event — Sự kiện / chuyến đi / nhóm chia tiền
 // ---------------------------------------------------------------------------
+enum RoundingMode {
+  ROUND_ROBIN
+  ROUND_UP
+}
+
 model Event {
-  id                 String   @id @default(uuid())
+  id                 String       @id @default(uuid())
   title              String
   /// Tiền tệ gốc của sự kiện (ISO 4217). Đổi tỪn từ `currency` — dùng RENAME COLUMN trong migration, không DROP+ADD
-  baseCurrency       String   @default("VND")
+  baseCurrency       String       @default("VND")
   /// DeviceToken của người tạo event — soft identity, dùng để kiểm tra quyền đổi baseCurrency
   creatorDeviceToken String?
+  /// Quy tắc làm tròn tiền lẻ khi chia tiền
+  roundingMode       RoundingMode @default(ROUND_ROBIN)
   /// Chế độ nâng cao (có quản lý ngân sách / quyết toán bù trừ)
-  isAdvancedMode     Boolean  @default(false)
-  isLocked           Boolean  @default(false)
-  seikyuClaimerId    String?  // Thêm trường lưu ID người đại diện Seikyu
-  avgBudget          Int?     @default(0)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  isAdvancedMode     Boolean      @default(false)
+  isLocked           Boolean      @default(false)
+  seikyuClaimerId    String?      // Thêm trường lưu ID người đại diện Seikyu
+  avgBudget          Int?         @default(0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   participants Participant[]
   expenses     Expense[]
@@ -60,9 +67,11 @@ model Participant {
   budget      Int        @default(0)
   
   /// Hệ số (weight) để tính toán tự động khi chia theo phần
-  weight       Float @default(1.0)
+  weight          Float @default(1.0)
   /// Cấu hình gia đình dạng { adults: number, children: number[] }
-  familyConfig Json?
+  familyConfig    Json?
+  /// Tổng số lần người này đã gánh +1 đơn vị tiền lẻ khi chia theo ROUND_ROBIN
+  remainderBurden Int   @default(0)
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
@@ -132,6 +141,8 @@ model Expense {
   splitMode        SplitMode @default(AMOUNT)
   /// Link hóa đơn đính kèm (Cloudinary URL)
   receiptUrl       String?
+  /// Số tiền dôi ra nếu chia theo ROUND_UP (tích lũy vào Quỹ dư)
+  surplus          Int      @default(0)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   /// Optimistic locking — tăng mỗi lần update để tránh 2 người ghi đè nhau

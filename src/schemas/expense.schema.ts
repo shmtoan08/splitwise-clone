@@ -54,15 +54,17 @@ const expenseBaseSchema = z.object({
     .optional(),
   expenseDate: z.coerce.date().optional(),
   receiptUrl: z.string().url().optional().nullable(),
+  /** Số tiền dôi ra khi chia theo ROUND_UP */
+  surplus: z.number().int().min(0).default(0).optional(),
 });
 
 export const addExpenseSchema = expenseBaseSchema.refine(
   (data) => {
     const sum = data.splitConfig.splits.reduce((acc, split) => acc + split.amount, 0);
-    return sum === data.amount;
+    return sum === data.amount + (data.surplus || 0);
   },
   {
-    message: "Tổng số tiền chia chi tiết không khớp với tổng khoản chi.",
+    message: "Tổng số tiền chia chi tiết không khớp với tổng khoản chi (+ tiền dư).",
     path: ["splitConfig"],
   }
 );
@@ -78,10 +80,10 @@ export const updateExpenseSchema = expenseBaseSchema
   .refine(
     (data) => {
       const sum = data.splitConfig.splits.reduce((acc, split) => acc + split.amount, 0);
-      return sum === data.amount;
+      return sum === data.amount + (data.surplus || 0);
     },
     {
-      message: "Tổng số tiền chia chi tiết không khớp với tổng khoản chi.",
+      message: "Tổng số tiền chia chi tiết không khớp với tổng khoản chi (+ tiền dư).",
       path: ["splitConfig"],
     }
   );

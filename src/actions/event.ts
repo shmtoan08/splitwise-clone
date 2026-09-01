@@ -1,8 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { createEventSchema } from "@/schemas/event.schema";
-import { updateEventCurrencySchema } from "@/schemas/event.schema";
+import { createEventSchema, updateEventCurrencySchema, updateEventRoundingModeSchema } from "@/schemas/event.schema";
 import { redirect } from "next/navigation";
 import type { ActionResult } from "@/types";
 import { cookies } from "next/headers";
@@ -50,6 +49,7 @@ export async function createEvent(
       data: {
         title: parsed.data.title,
         baseCurrency: parsed.data.currency ?? "VND",
+        roundingMode: parsed.data.roundingMode ?? "ROUND_ROBIN",
         creatorDeviceToken: deviceToken,
       },
       select: {
@@ -74,6 +74,7 @@ export async function getEventById(eventId: string) {
         title: true,
         createdAt: true,
         baseCurrency: true,
+        roundingMode: true,
         avgBudget: true,
         creatorDeviceToken: true,
         isAdvancedMode: true,
@@ -89,6 +90,7 @@ export async function getEventById(eventId: string) {
             budget: true,
             weight: true,
             familyConfig: true,
+            remainderBurden: true,
             paymentInfo: {
               select: {
                 bankBIN: true,
@@ -114,6 +116,7 @@ export async function getEventById(eventId: string) {
             isCrossSubsidy: true,
             splitMode: true,
             receiptUrl: true,
+            surplus: true,
             splits: {
               select: {
                 participantId: true,
@@ -639,5 +642,47 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
   } catch (error) {
     console.error("[deleteEvent] error:", error);
     return { success: false, error: "Lỗi hệ thống khi xóa sự kiện." };
+  }
+}
+
+export async function updateEventRoundingMode(data: unknown): Promise<ActionResult> {
+  const parsed = updateEventRoundingModeSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: "Dữ liệu không hợp lệ." };
+  }
+
+  const { eventId, roundingMode } = parsed.data;
+
+  try {
+    const cookieStore = await cookies();
+    const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { creatorDeviceToken: true, isLocked: true },
+    });
+
+    if (!event) {
+      return { success: false, error: "Sự kiện không tồn tại." };
+    }
+
+    if (event.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa, không thể thay đổi cài đặt." };
+    }
+
+    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+      return { success: false, error: "unauthorized" };
+    }
+
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { roundingMode },
+    });
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("[updateEventRoundingMode] error:", error);
+    return { success: false, error: "Lỗi hệ thống khi cập nhật quy tắc làm tròn." };
   }
 }

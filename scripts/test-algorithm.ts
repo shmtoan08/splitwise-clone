@@ -1,4 +1,4 @@
-import { splitEvenly, validateSplitSum } from "../src/utils/algorithm";
+import { splitEvenly, splitByShares, validateSplitSum } from "../src/utils/algorithm";
 
 function runTest(name: string, fn: () => void) {
   try {
@@ -17,53 +17,78 @@ function assertEqual(actual: any, expected: any, message: string) {
 
 console.log("=== RUNNING ALGORITHM TESTS ===");
 
-runTest("100,000 chia 3 người", () => {
-  const splits = splitEvenly(100000, ["A", "B", "C"]);
-  validateSplitSum(100000, splits);
-  assertEqual(splits[0].amount, 33334, "A nhận 33334");
-  assertEqual(splits[1].amount, 33333, "B nhận 33333");
-  assertEqual(splits[2].amount, 33333, "C nhận 33333");
+// 1. ROUND_ROBIN tests
+runTest("ROUND_ROBIN: 1000¥ chia 3 người (remainderBurden ban đầu = 0)", () => {
+  const participants = [
+    { id: "A", remainderBurden: 0 },
+    { id: "B", remainderBurden: 0 },
+    { id: "C", remainderBurden: 0 },
+  ];
+  const res = splitEvenly(1000, participants, "ROUND_ROBIN");
+  validateSplitSum(1000, res.splits, res.surplus);
+  assertEqual(res.surplus, 0, "Surplus phải = 0");
+  assertEqual(res.splits[0].amount, 334, "A nhận 334 (do A đứng đầu theo alphabetical khi cùng burden = 0)");
+  assertEqual(res.splits[0].isExtra, true, "A isExtra = true");
+  assertEqual(res.splits[1].amount, 333, "B nhận 333");
+  assertEqual(res.splits[2].amount, 333, "C nhận 333");
 });
 
-runTest("100,000 chia 4 người", () => {
-  const splits = splitEvenly(100000, ["A", "B", "C", "D"]);
-  validateSplitSum(100000, splits);
-  assertEqual(splits[0].amount, 25000, "A nhận 25000");
-  assertEqual(splits[3].amount, 25000, "D nhận 25000");
+runTest("ROUND_ROBIN: Bill thứ 2 luân phiên (A burden = 1, B burden = 0, C burden = 0)", () => {
+  const participants = [
+    { id: "A", remainderBurden: 1 },
+    { id: "B", remainderBurden: 0 },
+    { id: "C", remainderBurden: 0 },
+  ];
+  const res = splitEvenly(1000, participants, "ROUND_ROBIN");
+  validateSplitSum(1000, res.splits, res.surplus);
+  assertEqual(res.surplus, 0, "Surplus phải = 0");
+  assertEqual(res.splits[0].amount, 333, "A nhận 333 (vì A đã gánh ở bill trước)");
+  assertEqual(res.splits[0].isExtra, false, "A isExtra = false");
+  assertEqual(res.splits[1].amount, 334, "B nhận 334 (ưu tiên burden = 0)");
+  assertEqual(res.splits[1].isExtra, true, "B isExtra = true");
+  assertEqual(res.splits[2].amount, 333, "C nhận 333");
 });
 
-runTest("1 người duy nhất", () => {
-  const splits = splitEvenly(50000, ["A"]);
-  validateSplitSum(50000, splits);
-  assertEqual(splits[0].amount, 50000, "A nhận toàn bộ 50000");
+runTest("ROUND_ROBIN: Bill thứ 3 luân phiên (A burden = 1, B burden = 1, C burden = 0)", () => {
+  const participants = [
+    { id: "A", remainderBurden: 1 },
+    { id: "B", remainderBurden: 1 },
+    { id: "C", remainderBurden: 0 },
+  ];
+  const res = splitEvenly(1000, participants, "ROUND_ROBIN");
+  validateSplitSum(1000, res.splits, res.surplus);
+  assertEqual(res.splits[0].amount, 333, "A nhận 333");
+  assertEqual(res.splits[1].amount, 333, "B nhận 333");
+  assertEqual(res.splits[2].amount, 334, "C nhận 334 (đến lượt C gánh)");
+  assertEqual(res.splits[2].isExtra, true, "C isExtra = true");
 });
 
-runTest("2 đồng chia 5 người", () => {
-  const splits = splitEvenly(2, ["A", "B", "C", "D", "E"]);
-  validateSplitSum(2, splits);
-  assertEqual(splits[0].amount, 1, "A nhận 1");
-  assertEqual(splits[1].amount, 1, "B nhận 1");
-  assertEqual(splits[2].amount, 0, "C nhận 0");
-  assertEqual(splits[3].amount, 0, "D nhận 0");
-  assertEqual(splits[4].amount, 0, "E nhận 0");
+// 2. ROUND_UP tests
+runTest("ROUND_UP: 1000¥ chia 3 người (cào bằng 334¥, surplus 2¥)", () => {
+  const participants = ["A", "B", "C"];
+  const res = splitEvenly(1000, participants, "ROUND_UP");
+  validateSplitSum(1000, res.splits, res.surplus);
+  assertEqual(res.surplus, 2, "Surplus phải = 2");
+  assertEqual(res.splits[0].amount, 334, "A nhận 334");
+  assertEqual(res.splits[1].amount, 334, "B nhận 334");
+  assertEqual(res.splits[2].amount, 334, "C nhận 334");
 });
 
-runTest("Ném lỗi khi totalAmount <= 0", () => {
-  try {
-    splitEvenly(0, ["A", "B"]);
-    throw new Error("Không ném lỗi");
-  } catch (error: any) {
-    assertEqual(error.message, "splitEvenly: totalAmount phải lớn hơn 0", "Lỗi chính xác");
-  }
+runTest("ROUND_UP: 100,000đ chia theo shares (1.5 - 1 - 1)", () => {
+  const participants = [
+    { participantId: "A", shares: 1.5 },
+    { participantId: "B", shares: 1 },
+    { participantId: "C", shares: 1 },
+  ];
+  const res = splitByShares(100000, participants, "ROUND_UP");
+  validateSplitSum(100000, res.splits, res.surplus);
+  // 100000 * 1.5 / 3.5 = 42857.14 -> ceil = 42858
+  // 100000 * 1 / 3.5 = 28571.42 -> ceil = 28572
+  // Total = 42858 + 28572 + 28572 = 100002 -> surplus = 2
+  assertEqual(res.splits[0].amount, 42858, "A nhận 42858");
+  assertEqual(res.splits[1].amount, 28572, "B nhận 28572");
+  assertEqual(res.splits[2].amount, 28572, "C nhận 28572");
+  assertEqual(res.surplus, 2, "Surplus = 2");
 });
 
-runTest("Ném lỗi khi participantIds rỗng", () => {
-  try {
-    splitEvenly(100000, []);
-    throw new Error("Không ném lỗi");
-  } catch (error: any) {
-    assertEqual(error.message, "splitEvenly: participantIds không được rỗng", "Lỗi chính xác");
-  }
-});
-
-console.log("=== DONE ===");
+console.log("=== ALL TESTS COMPLETED ===");

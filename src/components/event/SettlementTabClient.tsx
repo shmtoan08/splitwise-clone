@@ -45,6 +45,7 @@ export default function SettlementTabClient({ event, isCreator = false }: Props)
   const { id: eventId, title, baseCurrency, participants, expenses, settlements, isAdvancedMode, seikyuClaimerId } = event;
   const t = useTranslations("settlement");
   const tCommon = useTranslations("common");
+  const tRounding = useTranslations("rounding");
   const { identity } = useParticipantIdentity(participants);
   const currentParticipantId = identity?.participantId || null;
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,6 +53,10 @@ export default function SettlementTabClient({ event, isCreator = false }: Props)
   const [claimerId, setClaimerId] = useState<string | undefined>(event.seikyuClaimerId || undefined);
   const [settlementMode, setSettlementMode] = useState<"AUTO" | "CLAIMER">(() => (event.seikyuClaimerId ? "CLAIMER" : "AUTO"));
   const [isPending, startTransition] = useTransition();
+
+  const totalSurplus = useMemo(() => {
+    return expenses.reduce((sum: number, ex: any) => sum + (ex.surplus || 0), 0);
+  }, [expenses]);
 
   const [isLocked, setIsLocked] = useState<boolean>(!!event.isLocked);
   const [isLockPending, startLockTransition] = useTransition();
@@ -284,6 +289,26 @@ export default function SettlementTabClient({ event, isCreator = false }: Props)
 
       <div className="flex-1 overflow-y-auto scrollbar-hide px-3 sm:px-6 py-4 pb-8 sm:pb-12 lg:pb-16 w-full max-w-5xl mx-auto space-y-4">
         
+        {/* === CARD QUỸ DƯ SỰ KIỆN (NẾU CÓ SURPLUS > 0 VÀ LÀ CREATOR) === */}
+        {isCreator && totalSurplus > 0 && (
+          <div className="bg-gradient-to-r from-amber-500/10 via-amber-400/15 to-orange-400/10 border-2 border-amber-300/80 rounded-2xl p-4 sm:p-4.5 shadow-sm space-y-1.5 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">💎</span>
+                <h4 className="font-bold text-amber-950 text-sm sm:text-base">
+                  {tRounding("surplusFundTitle", { fallback: "Quỹ dư sự kiện" })}
+                </h4>
+              </div>
+              <span className="font-extrabold text-amber-900 text-base sm:text-lg">
+                +{formatCurrency(totalSurplus, { currency: baseCurrency })}
+              </span>
+            </div>
+            <p className="text-xs text-amber-900/80 leading-relaxed font-medium pl-7">
+              {tRounding("surplusFundDesc", { fallback: "Tiền dôi ra từ các lần làm tròn lên. Người đại diện có thể tùy ý sử dụng bù phí chuyển khoản hoặc chi phí chung." })}
+            </p>
+          </div>
+        )}
+
         {/* === 1. THỐNG KÊ TỔNG QUAN (THU GỌN / MỞ RỘNG) === */}
         <section className="space-y-2">
           <button

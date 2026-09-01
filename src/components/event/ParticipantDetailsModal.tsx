@@ -291,6 +291,7 @@ export default function ParticipantDetailsModal({ open, onOpenChange, participan
           currency={currency}
           groups={groups}
           isReadOnly={!checkCanEdit(selectedExpense)}
+          isCreator={isEventCreator}
         />
       )}
     </>

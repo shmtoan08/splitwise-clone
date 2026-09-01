@@ -300,6 +300,7 @@
     "success": "Thành công",
     "unauthorized": "Không có quyền thực hiện.",
     "loading": "Đang tải...",
+    "processing": "Đang xử lý...",
     "error": "Đã xảy ra lỗi",
     "notFound": "Không tìm thấy",
     "back": "Quay lại",
@@ -443,5 +444,29 @@
     "noExpenses": "Chưa có khoản chi nào trong nhóm này",
     "errorUnauthorized": "Bạn không phải thành viên của nhóm này",
     "errorSystem": "Không thể tải dữ liệu. Vui lòng thử lại."
+  },
+  "rounding": {
+    "roundingMode": "Quy tắc làm tròn tiền lẻ",
+    "roundRobin": "Gánh luân phiên (Mặc định)",
+    "roundRobinDesc": "Chia đúng tổng tiền, tự động luân phiên người gánh tiền lẻ 1-2 đơn vị giữa các hóa đơn.",
+    "roundUp": "Làm tròn lên (Cào bằng)",
+    "roundUpDesc": "Mọi người đóng số tiền bằng nhau tuyệt đối, phần tiền dôi ra được tích lũy vào Quỹ dư sự kiện.",
+    "surplusFundTitle": "Quỹ dư sự kiện",
+    "surplusFundDesc": "Tiền dôi ra từ các lần làm tròn lên. Người đại diện có thể tùy ý sử dụng bù phí chuyển khoản hoặc chi phí chung.",
+    "surplusBadge": "Dư vào quỹ",
+    "surplusHint": "Tiền dư vào quỹ: +{surplus} {currency}",
+    "extraBurdenHint": "(+{amount})",
+    "saveSuccess": "Đã lưu quy tắc làm tròn!",
+    "settingButtonTooltip": "Cài đặt làm tròn",
+    "settingButton": "Làm tròn",
+    "currentlySelected": "Đang chọn"
+  },
+  "settings": {
+    "title": "Cài đặt sự kiện",
+    "button": "Cài đặt",
+    "advancedSectionTitle": "Chế độ nâng cao",
+    "advancedSectionDesc": "Quản lý định mức ngân sách theo thành viên và tự động bù đắp chéo khi quyết toán.",
+    "roundingSectionTitle": "Quy tắc làm tròn tiền lẻ",
+    "saveSuccess": "Đã lưu cài đặt!"
   }
 }

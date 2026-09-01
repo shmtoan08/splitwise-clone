@@ -7,7 +7,7 @@ import { Link } from "@/i18n/routing";
 import { buttonVariants } from "@/components/ui/button";
 import { cookies } from "next/headers";
 import CurrencySettingButton from "@/components/event/CurrencySettingButton";
-import AdvancedModeSwitch from "@/components/event/AdvancedModeSwitch";
+import EventSettingsButton from "@/components/event/EventSettingsButton";
 import { getTranslations } from "next-intl/server";
 import RecentEventTracker from "@/components/event/RecentEventTracker";
 import EventTitleHeader from "@/components/event/EventTitleHeader";
@@ -96,15 +96,20 @@ export default async function EventLayout({ children, params }: Props) {
 
           {/* CỤM PHẢI: Các nút công cụ */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {isCreator && (
-              <AdvancedModeSwitch eventId={event.id} isAdvancedMode={event.isAdvancedMode} />
-            )}
             <ShareButton eventId={event.id} />
             <CurrencySettingButton
               eventId={event.id}
               currentCurrency={event.baseCurrency}
               isCreator={isCreator}
             />
+            {isCreator && (
+              <EventSettingsButton
+                eventId={event.id}
+                isAdvancedMode={event.isAdvancedMode}
+                currentRoundingMode={(event.roundingMode as any) || "ROUND_ROBIN"}
+                isCreator={isCreator}
+              />
+            )}
           </div>
 
         </div>

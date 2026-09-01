@@ -69,7 +69,16 @@ export default function EventTabsClient({ event, isCreator }: Props) {
           </TabsContent>
 
           <TabsContent value="expenses" className="absolute inset-0 m-0 data-[state=inactive]:hidden flex flex-col animate-in fade-in duration-300">
-            <ExpenseTab eventId={event.id} participants={event.participants} expenses={event.expenses} currency={event.baseCurrency} groups={event.groups} isLocked={event.isLocked} isCreator={isCreator} />
+            <ExpenseTab 
+              eventId={event.id} 
+              participants={event.participants} 
+              expenses={event.expenses} 
+              currency={event.baseCurrency} 
+              groups={event.groups} 
+              isLocked={event.isLocked} 
+              isCreator={isCreator} 
+              roundingMode={event.roundingMode} 
+            />
           </TabsContent>
 
           <TabsContent value="balances" className="absolute inset-0 m-0 data-[state=inactive]:hidden flex flex-col overflow-y-auto animate-in fade-in duration-300">

@@ -19,6 +19,7 @@ export default function CreateEventForm() {
 
   // Tự động khởi tạo tiền tệ dựa trên vị trí địa lý / múi giờ
   const [currency, setCurrency] = useState<string>("VND");
+  const [roundingMode, setRoundingMode] = useState<"ROUND_ROBIN" | "ROUND_UP">("ROUND_ROBIN");
 
   useEffect(() => {
     const detectedCurrency = detectCurrencyFromLocation(locale);
@@ -34,7 +35,7 @@ export default function CreateEventForm() {
     setError(null);
 
     startTransition(async () => {
-      const result = await createEvent({ title, currency });
+      const result = await createEvent({ title, currency, roundingMode });
       if (result && result.success && result.data?.eventId) {
         router.push(`/e/${result.data.eventId}`);
       } else if (result && !result.success) {
