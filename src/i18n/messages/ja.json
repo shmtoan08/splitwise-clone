@@ -1,11 +1,11 @@
 {
   "app": {
-    "name": "グループ割り勘",
-    "tagline": "ログイン不要で簡単割り勘",
+    "name": "Wari App",
+    "tagline": "スマートなグループ割り勘＆支出管理アプリ",
     "description": "無料のグループ割り勘アプリ。ログイン不要。ベトナム語と日本語に対応。",
     "freeNoLoginBadge": "無料 ＆ ログイン不要",
-    "homeTitle": "割り勘グループを作成",
-    "layoutTitle": "グループ割り勘 — Splitwise Clone"
+    "homeTitle": "Wari App — グループ割り勘＆支出管理",
+    "layoutTitle": "Wari App — グループ割り勘＆支出管理"
   },
     "Auth": {
     "login_title": "ログイン",

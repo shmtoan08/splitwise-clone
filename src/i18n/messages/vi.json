@@ -1,11 +1,11 @@
 {
   "app": {
-    "name": "Chia Tiền Nhóm",
-    "tagline": "Chia tiền dễ dàng, không cần đăng nhập",
-    "description": "Ứng dụng chia tiền nhóm miễn phí. Không cần đăng nhập. Hỗ trợ tiếng Việt và tiếng Nhật.",
+    "name": "Wari App",
+    "tagline": "Ứng dụng quản lý & chia tiền nhóm thông minh",
+    "description": "Ứng dụng chia tiền nhóm miễn phí, không rào cản. Hỗ trợ tiếng Việt và tiếng Nhật.",
     "freeNoLoginBadge": "Miễn phí & Không cần đăng nhập",
-    "homeTitle": "Tạo nhóm chia tiền",
-    "layoutTitle": "Chia Tiền Nhóm — Splitwise Clone"
+    "homeTitle": "Wari App — Quản Lý & Chia Tiền Nhóm",
+    "layoutTitle": "Wari App — Quản Lý & Chia Tiền Nhóm"
   },
     "Auth": {
     "login_title": "Đăng nhập",

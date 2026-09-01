@@ -15,8 +15,8 @@ interface EmailContent {
 
 const emailTranslations: Record<string, EmailContent> = {
   vi: {
-    subject: "Xác thực địa chỉ email của bạn",
-    senderName: "Chia Tiền Nhóm",
+    subject: "Xác thực địa chỉ email của bạn - Wari App",
+    senderName: "Wari App",
     title: "Xác thực tài khoản",
     greeting: "Xin chào,",
     body: "Cảm ơn bạn đã đăng ký tài khoản. Vui lòng xác nhận email của bạn bằng cách click vào nút bên dưới:",
@@ -25,8 +25,8 @@ const emailTranslations: Record<string, EmailContent> = {
     expiryNotice: "Link xác nhận này sẽ hết hạn sau 1 giờ.",
   },
   ja: {
-    subject: "メールアドレスの確認",
-    senderName: "割り勘アプリ",
+    subject: "メールアドレスの確認 - Wari App",
+    senderName: "Wari App",
     title: "アカウントの確認",
     greeting: "こんにちは、",
     body: "アカウント登録ありがとうございます。以下のボタンをクリックしてメールアドレスを認証してください：",

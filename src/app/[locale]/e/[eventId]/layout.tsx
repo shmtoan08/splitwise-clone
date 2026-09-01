@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   
   if (!event) {
     return {
-      title: "Group not found | Splitwise Clone",
+      title: "Group not found | Wari App",
     };
   }
 
@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title,
       description,
       type: "website",
-      siteName: "Splitwise Clone",
+      siteName: "Wari App",
       images: ["/og-image.jpg"],
     },
     twitter: {
