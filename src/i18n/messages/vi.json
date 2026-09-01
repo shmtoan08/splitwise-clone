@@ -60,7 +60,9 @@
   "currency_vnd": "Tiền Việt (VND)",
   "currency_jpy": "Tiền Nhật (JPY)",
   "login_button": "Đăng nhập",
-  "my_account": "Tài khoản của tôi"
+  "my_account": "Tài khoản của tôi",
+  "privacy_policy": "Chính sách bảo mật",
+  "terms_of_service": "Điều khoản dịch vụ"
 },
   "home": {
     "createGroup": "Tạo nhóm mới",
@@ -533,5 +535,51 @@
     "lockedBadge": "Đã kết thúc",
     "viewEvent": "Xem chi tiết",
     "backHome": "Trang chủ"
+  },
+  "privacy": {
+    "metaTitle": "Chính Sách Bảo Mật | Wari - Chia Tiền Nhóm",
+    "metaDescription": "Chính sách bảo mật và quyền riêng tư của ứng dụng Wari",
+    "backHome": "Quay lại trang chủ",
+    "badge": "Văn bản chính thức",
+    "title": "Chính Sách Bảo Mật (Privacy Policy)",
+    "lastUpdated": "Cập nhật lần cuối: Ngày 01/09/2026 • Phiên bản 1.0",
+    "appLabel": "Ứng dụng:",
+    "appName": "Wari (Chia tiền nhóm)",
+    "domainLabel": "Tên miền:",
+    "domainValue": "https://wari.ezjlpt.com (Tổ chức: ezjlpt.com)",
+    "emailLabel": "Email liên hệ:",
+    "emailValue": "shmtoan@gmail.com",
+    "sec1Title": "1. Giới thiệu",
+    "sec1Content": "Wari cam kết bảo vệ quyền riêng tư và dữ liệu của bạn. Chính sách này giải thích cách chúng tôi thu thập, sử dụng và bảo vệ thông tin khi bạn truy cập và sử dụng dịch vụ trên {domain}.",
+    "sec2Title": "2. Dữ liệu thu thập & Quyền Google OAuth",
+    "sec2Intro": "Chúng tôi chỉ yêu cầu các quyền hạn mức cơ bản khi đăng nhập Google:",
+    "sec2Email": "Xác thực danh tính và quản lý tài khoản.",
+    "sec2Profile": "Hiển thị trong nhóm chia tiền.",
+    "sec2Openid": "Duy trì phiên đăng nhập bảo mật.",
+    "sec2DeviceToken": "Định danh phiên ẩn danh qua Cookie mà không bắt buộc đăng ký.",
+    "sec3Title": "3. Cam kết Giới hạn Sử dụng (Google API Limited Use)",
+    "sec3Content": "Wari tuân thủ đầy đủ Chính sách Dữ liệu Người dùng Google API. Chúng tôi tuyệt đối không bán dữ liệu cho bên thứ ba, không sử dụng dữ liệu cho mục đích quảng cáo hoặc huấn luyện mô hình AI.",
+    "sec3PolicyLinkText": "Chính sách Dữ liệu Người dùng Google API",
+    "sec4Title": "4. Yêu cầu xóa dữ liệu (Data Deletion)",
+    "sec4Content": "Bạn có quyền yêu cầu xóa vĩnh viễn tài khoản và toàn bộ dữ liệu sự kiện bất kỳ lúc nào bằng cách gửi email về {email}. Dữ liệu sẽ được dọn dẹp sạch trong vòng 7 ngày làm việc."
+  },
+  "terms": {
+    "metaTitle": "Điều Khoản Dịch Vụ | Wari - Chia Tiền Nhóm",
+    "metaDescription": "Quy định và điều khoản sử dụng ứng dụng Wari",
+    "backHome": "Quay lại trang chủ",
+    "badge": "Quy định sử dụng",
+    "title": "Điều Khoản Dịch Vụ (Terms of Service)",
+    "lastUpdated": "Cập nhật lần cuối: Ngày 01/09/2026 • Phiên bản 1.0",
+    "sec1Title": "1. Chấp thuận Điều khoản",
+    "sec1Content": "Bằng việc truy cập hoặc sử dụng ứng dụng Wari tại {domain}, bạn đồng ý tuân thủ toàn bộ các điều khoản và điều kiện được nêu tại đây.",
+    "sec2Title": "2. Tuyên bố Miễn trừ Trách nhiệm Tài chính",
+    "sec2NoticeLabel": "Lưu ý quan trọng:",
+    "sec2Content": "Wari là công cụ hỗ trợ tính toán và ghi chép sổ sách chi tiêu. Wari không phải là ngân hàng hay trung gian thanh toán và không giữ bất kỳ khoản tiền nào của người dùng. Mọi giao dịch chuyển khoản thực tế được thực hiện trực tiếp giữa các thành viên.",
+    "sec3Title": "3. Trách nhiệm người dùng",
+    "sec3Item1": "Tự quản lý và bảo mật đường link nhóm chi tiêu của mình.",
+    "sec3Item2": "Không sử dụng dịch vụ cho mục đích vi phạm pháp luật, gian lận hoặc phá hoại hệ thống.",
+    "sec3Item3": "Kiểm tra lại số liệu trước khi thực hiện chuyển khoản thực tế.",
+    "sec4Title": "4. Thông tin liên hệ",
+    "sec4Content": "Mọi thắc mắc vui lòng gửi về email: {email} (Đơn vị phát triển: ezjlpt.com)."
   }
 }

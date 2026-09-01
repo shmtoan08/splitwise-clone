@@ -96,6 +96,32 @@ export default async function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* FOOTER */}
+      <footer className="w-full border-t border-slate-200/80 bg-white/70 backdrop-blur-md py-6 mt-12 z-10">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-700">{t("app.name")}</span>
+            <span>•</span>
+            <span>© {new Date().getFullYear()} ezjlpt.com</span>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <Link
+              href="/privacy"
+              className="hover:text-slate-900 transition-colors underline-offset-4 hover:underline"
+            >
+              {t("Core.privacy_policy")}
+            </Link>
+            <Link
+              href="/terms"
+              className="hover:text-slate-900 transition-colors underline-offset-4 hover:underline"
+            >
+              {t("Core.terms_of_service")}
+            </Link>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }

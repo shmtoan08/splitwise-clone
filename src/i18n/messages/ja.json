@@ -60,7 +60,9 @@
   "currency_vnd": "ベトナムドン (VND)",
   "currency_jpy": "日本円 (JPY)",
   "login_button": "ログイン",
-  "my_account": "マイアカウント"
+  "my_account": "マイアカウント",
+  "privacy_policy": "プライバシーポリシー",
+  "terms_of_service": "利用規約"
 },
   "home": {
     "createGroup": "グループを作成",
@@ -530,5 +532,51 @@
     "lockedBadge": "終了済み",
     "viewEvent": "詳細を見る",
     "backHome": "ホーム"
+  },
+  "privacy": {
+    "metaTitle": "プライバシーポリシー | Wari - 割り勘アプリ",
+    "metaDescription": "Wariアプリのプライバシーポリシーと個人情報保護方針",
+    "backHome": "ホームに戻る",
+    "badge": "公式ポリシー",
+    "title": "プライバシーポリシー (Privacy Policy)",
+    "lastUpdated": "最終更新日：2026年9月1日 • バージョン 1.0",
+    "appLabel": "アプリ名：",
+    "appName": "Wari（割り勘アプリ）",
+    "domainLabel": "ドメイン：",
+    "domainValue": "https://wari.ezjlpt.com (運営組織：ezjlpt.com)",
+    "emailLabel": "お問い合わせ：",
+    "emailValue": "shmtoan@gmail.com",
+    "sec1Title": "1. はじめに",
+    "sec1Content": "Wariはお客様のプライバシーおよび個人情報の保護に努めています。本ポリシーは、お客様が {domain} のサービスを利用する際に、当社がどのように情報を収集、利用、保護するかを説明するものです。",
+    "sec2Title": "2. 収集するデータとGoogle OAuth権限",
+    "sec2Intro": "Googleログイン時には必要最低限の基本権限のみを要求します：",
+    "sec2Email": "本人確認およびアカウント管理。",
+    "sec2Profile": "割り勘グループ内での表示名およびアイコン。",
+    "sec2Openid": "安全なログインセッションの維持。",
+    "sec2DeviceToken": "会員登録不要のゲスト利用時におけるCookieによる端末識別。",
+    "sec3Title": "3. Google API限定使用要件の遵守 (Limited Use Policy)",
+    "sec3Content": "WariはGoogle API ユーザーデータポリシーを完全に遵守しています。当社は第三者へのデータ販売を一切行わず、広告目的やAIモデルのトレーニングにも利用しません。",
+    "sec3PolicyLinkText": "Google API ユーザーデータポリシー",
+    "sec4Title": "4. データの削除要請 (Data Deletion)",
+    "sec4Content": "お客様はいつでも {email} 宛てにメールを送信することにより、アカウントおよび全関連データの完全削除を要求できます。データは7営業日以内に完全に削除されます。"
+  },
+  "terms": {
+    "metaTitle": "利用規約 | Wari - 割り勘アプリ",
+    "metaDescription": "Wariアプリのご利用規約と免責事項",
+    "backHome": "ホームに戻る",
+    "badge": "利用規約",
+    "title": "利用規約 (Terms of Service)",
+    "lastUpdated": "最終更新日：2026年9月1日 • バージョン 1.0",
+    "sec1Title": "1. 規約への同意",
+    "sec1Content": "{domain} 上でWariアプリにアクセスまたは利用することにより、お客様は本規約のすべての条項に同意したものとみなされます。",
+    "sec2Title": "2. 財務に関する免責事項",
+    "sec2NoticeLabel": "重要なお知らせ：",
+    "sec2Content": "Wariは割り勘の計算および支出記録を支援するツールです。Wariは銀行や決済代行業者ではなく、ユーザーの資金を一切預かりません。実際の送金や精算は、メンバー同士で直接行ってください。",
+    "sec3Title": "3. ユーザーの責任",
+    "sec3Item1": "ご自身の割り勘グループのURLは自己責任で管理・保護してください。",
+    "sec3Item2": "違法行為、不正行為、またはシステムの妨害を目的とした利用は禁止します。",
+    "sec3Item3": "実際の送金を行う前に、必ず計算結果をご確認ください。",
+    "sec4Title": "4. お問い合わせ先",
+    "sec4Content": "ご不明な点がございましたら、{email} までメールでお問い合わせください（開発元：ezjlpt.com）。"
   }
 }
