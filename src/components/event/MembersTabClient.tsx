@@ -3,13 +3,13 @@
 import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useParticipantIdentity } from "@/hooks/useParticipantIdentity";
-import { addParticipant, deleteParticipant, updateParticipantName } from "@/actions/participant";
+import { addParticipant, deleteParticipant, updateParticipantName, resetParticipantIdentity } from "@/actions/participant";
 import { updateParticipantBudgets } from "@/actions/budget";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, User, Settings2, Users, Wallet, Trash2, Pencil, Search, SlidersHorizontal, X, Lock } from "lucide-react";
+import { UserPlus, User, Settings2, Users, Wallet, Trash2, Pencil, Search, SlidersHorizontal, X, Lock, RotateCcw } from "lucide-react";
 import { useAlert } from "@/providers/AlertProvider";
 import PaymentInfoForm from "@/components/event/PaymentInfoForm";
 import GroupManageModal from "./GroupManageModal";
@@ -479,19 +479,29 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                         : "bg-white border-slate-200/80 hover:border-slate-300"
                   }`}
                 >
-                  {/* Avatar */}
-                  <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
-                    isMe 
-                      ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-200' 
-                      : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {isMe ? <User size={18} /> : p.name.charAt(0).toUpperCase()}
+                  {/* Avatar & Trạng thái nhận diện */}
+                  <div className="relative shrink-0">
+                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
+                      isMe 
+                        ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-200' 
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {isMe ? <User size={18} /> : p.name.charAt(0).toUpperCase()}
+                    </div>
+                    {p.name !== "🏢 Quỹ Công ty" && (
+                      <span
+                        className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white shadow-2xs ${
+                          p.deviceToken ? "bg-emerald-500" : "bg-slate-300"
+                        }`}
+                        title={p.deviceToken ? t("deviceLinked") : t("deviceUnclaimed")}
+                      />
+                    )}
                   </div>
 
                   {/* Thông tin chính */}
                   <div className="flex-1 min-w-0">
-                    {/* Hàng 1: Tên thành viên + Badge Bạn + Nút Sửa tên */}
-                    <div className="flex items-center gap-1.5 min-w-0">
+                    {/* Hàng 1: Tên thành viên + Badge Bạn + Trạng thái nhận diện + Nút Sửa tên */}
+                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                       {editingNameParticipantId === p.id ? (
                         <Input
                           autoFocus
@@ -512,6 +522,21 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                         <Badge className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-800 border-emerald-200 shrink-0">
                           {t("youLabel")}
                         </Badge>
+                      )}
+
+                      {/* Trạng thái liên kết thiết bị */}
+                      {p.name !== "🏢 Quỹ Công ty" && !isMe && (
+                        <span
+                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-1 border shrink-0 ${
+                            p.deviceToken 
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                              : "bg-slate-50 text-slate-500 border-slate-200"
+                          }`}
+                          title={p.deviceToken ? t("deviceLinked") : t("deviceUnclaimed")}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${p.deviceToken ? "bg-emerald-500" : "bg-slate-400"}`} />
+                          <span className="hidden sm:inline">{p.deviceToken ? t("deviceLinked") : t("deviceUnclaimed")}</span>
+                        </span>
                       )}
 
                       {/* Nút Sửa tên */}
@@ -632,6 +657,42 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                           />
                         </DialogContent>
                       </Dialog>
+                    )}
+
+                    {/* Nút Hủy liên kết thiết bị (Reset vai trò) */}
+                    {isCreator && !isMe && !!p.deviceToken && p.name !== "🏢 Quỹ Công ty" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full text-amber-600 hover:bg-amber-50 hover:text-amber-700 active:scale-95 transition-all ${isLocked ? "opacity-60" : ""}`}
+                        title={t("resetIdentityTitle")}
+                        onClick={() => {
+                          if (isLocked) {
+                            showLockedNotice();
+                            return;
+                          }
+                          showAlert({
+                            type: "warning",
+                            title: t("resetIdentityTitle"),
+                            message: t("resetIdentityConfirm"),
+                            confirmText: t("resetIdentityConfirmBtn"),
+                            onConfirm: async () => {
+                              const res = await resetParticipantIdentity(eventId, p.id);
+                              if (!res.success) {
+                                if (res.error === "CANNOT_RESET_CREATOR") {
+                                  showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: t("cannotResetCreator") });
+                                } else {
+                                  showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: tCommon("unauthorized") || "Không có quyền thực hiện." });
+                                }
+                              } else {
+                                showAlert({ type: "success", title: tCommon("success") || "Thành công", message: t("resetIdentitySuccess") });
+                              }
+                            }
+                          });
+                        }}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </Button>
                     )}
 
                     {/* Nút Xóa thành viên */}

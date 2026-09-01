@@ -327,3 +327,57 @@ export async function updateParticipantName({
     return { success: false, error: "Không thể đổi tên thành viên" };
   }
 }
+
+export async function resetParticipantIdentity(
+  eventId: string,
+  participantId: string
+): Promise<ActionResult> {
+  try {
+    const cookieStore = await cookies();
+    const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+
+    if (!deviceToken) {
+      return { success: false, error: "unauthorized" };
+    }
+
+    // 1. Xác thực Creator
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { creatorDeviceToken: true, isLocked: true },
+    });
+
+    if (!event || event.creatorDeviceToken !== deviceToken) {
+      return { success: false, error: "unauthorized" };
+    }
+
+    if (event.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa." };
+    }
+
+    // 2. Kiểm tra Participant và chặn tự reset chính Creator
+    const participant = await prisma.participant.findUnique({
+      where: { id: participantId },
+    });
+
+    if (!participant || participant.eventId !== eventId) {
+      return { success: false, error: "participant_not_found" };
+    }
+
+    if (participant.deviceToken === event.creatorDeviceToken) {
+      return { success: false, error: "CANNOT_RESET_CREATOR" };
+    }
+
+    // 3. Giải phóng deviceToken để thiết bị khác có thể nhận lại
+    await prisma.participant.update({
+      where: { id: participantId },
+      data: { deviceToken: null },
+    });
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("[resetParticipantIdentity] error:", error);
+    return { success: false, error: "Lỗi hệ thống. Vui lòng thử lại sau." };
+  }
+}
+

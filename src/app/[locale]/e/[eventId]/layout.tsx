@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cookies } from "next/headers";
 import CurrencySettingButton from "@/components/event/CurrencySettingButton";
 import EventSettingsButton from "@/components/event/EventSettingsButton";
+import { LanguageSwitcher } from "@/components/core/LanguageSwitcher";
 import { getTranslations } from "next-intl/server";
 import RecentEventTracker from "@/components/event/RecentEventTracker";
 import EventTitleHeader from "@/components/event/EventTitleHeader";
@@ -97,6 +98,7 @@ export default async function EventLayout({ children, params }: Props) {
           {/* CỤM PHẢI: Các nút công cụ */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <ShareButton eventId={event.id} />
+            <LanguageSwitcher />
             <CurrencySettingButton
               eventId={event.id}
               currentCurrency={event.baseCurrency}
