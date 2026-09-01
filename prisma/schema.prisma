@@ -27,6 +27,8 @@ model Event {
   baseCurrency       String       @default("VND")
   /// DeviceToken của người tạo event — soft identity, dùng để kiểm tra quyền đổi baseCurrency
   creatorDeviceToken String?
+  /// Mã PIN bảo vệ quyền Creator (4-6 số)
+  passcode           String?
   /// Quy tắc làm tròn tiền lẻ khi chia tiền
   roundingMode       RoundingMode @default(ROUND_ROBIN)
   /// Chế độ nâng cao (có quản lý ngân sách / quyết toán bù trừ)

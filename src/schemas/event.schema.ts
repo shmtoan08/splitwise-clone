@@ -42,3 +42,16 @@ export const updateEventRoundingModeSchema = z.object({
 });
 
 export type UpdateEventRoundingModeInput = z.infer<typeof updateEventRoundingModeSchema>;
+
+/** Schema cho action cài đặt / cập nhật mã PIN bảo vệ Creator */
+export const updateEventPasscodeSchema = z.object({
+  eventId: z.string().uuid("eventId phải là UUID"),
+  passcode: z
+    .string()
+    .regex(/^\d{4,6}$/, "Mã PIN phải gồm 4 đến 6 chữ số")
+    .nullable()
+    .optional(),
+});
+
+export type UpdateEventPasscodeInput = z.infer<typeof updateEventPasscodeSchema>;
+

@@ -109,6 +109,7 @@ export default async function EventLayout({ children, params }: Props) {
                 eventId={event.id}
                 isAdvancedMode={event.isAdvancedMode}
                 currentRoundingMode={(event.roundingMode as any) || "ROUND_ROBIN"}
+                initialPasscode={event.passcode ?? null}
                 isCreator={isCreator}
               />
             )}
@@ -135,7 +136,11 @@ export default async function EventLayout({ children, params }: Props) {
         </div>
       </main>
 
-      <ClaimIdentityModal eventId={event.id} participants={event.participants} />
+      <ClaimIdentityModal
+        eventId={event.id}
+        participants={event.participants}
+        hasPasscode={!!event.passcode}
+      />
       <RecentEventTracker eventId={event.id} title={event.title} />
     </div>
   );

@@ -490,8 +490,10 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                     </div>
                     {p.name !== "🏢 Quỹ Công ty" && (
                       <span
-                        className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white shadow-2xs ${
-                          p.deviceToken ? "bg-emerald-500" : "bg-slate-300"
+                        className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 ${
+                          p.deviceToken 
+                            ? "bg-emerald-500 border-white shadow-2xs" 
+                            : "bg-slate-200 border-slate-300"
                         }`}
                         title={p.deviceToken ? t("deviceLinked") : t("deviceUnclaimed")}
                       />
@@ -500,8 +502,8 @@ export default function MembersTabClient({ event, isCreator }: Props) {
 
                   {/* Thông tin chính */}
                   <div className="flex-1 min-w-0">
-                    {/* Hàng 1: Tên thành viên + Badge Bạn + Trạng thái nhận diện + Nút Sửa tên */}
-                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                    {/* Hàng 1: Tên thành viên + Badge Bạn + Nút Sửa tên */}
+                    <div className="flex items-center gap-1.5 min-w-0">
                       {editingNameParticipantId === p.id ? (
                         <Input
                           autoFocus
@@ -522,21 +524,6 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                         <Badge className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-800 border-emerald-200 shrink-0">
                           {t("youLabel")}
                         </Badge>
-                      )}
-
-                      {/* Trạng thái liên kết thiết bị */}
-                      {p.name !== "🏢 Quỹ Công ty" && !isMe && (
-                        <span
-                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-1 border shrink-0 ${
-                            p.deviceToken 
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                              : "bg-slate-50 text-slate-500 border-slate-200"
-                          }`}
-                          title={p.deviceToken ? t("deviceLinked") : t("deviceUnclaimed")}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${p.deviceToken ? "bg-emerald-500" : "bg-slate-400"}`} />
-                          <span className="hidden sm:inline">{p.deviceToken ? t("deviceLinked") : t("deviceUnclaimed")}</span>
-                        </span>
                       )}
 
                       {/* Nút Sửa tên */}
@@ -660,12 +647,12 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                     )}
 
                     {/* Nút Hủy liên kết thiết bị (Reset vai trò) */}
-                    {isCreator && !isMe && !!p.deviceToken && p.name !== "🏢 Quỹ Công ty" && (
+                    {(isCreator || isMe) && !!p.deviceToken && p.name !== "🏢 Quỹ Công ty" && (
                       <Button
                         variant="ghost"
                         size="icon"
                         className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full text-amber-600 hover:bg-amber-50 hover:text-amber-700 active:scale-95 transition-all ${isLocked ? "opacity-60" : ""}`}
-                        title={t("resetIdentityTitle")}
+                        title={isMe ? t("resetSelfTitle") : t("resetIdentityTitle")}
                         onClick={() => {
                           if (isLocked) {
                             showLockedNotice();
@@ -673,21 +660,25 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                           }
                           showAlert({
                             type: "warning",
-                            title: t("resetIdentityTitle"),
-                            message: t("resetIdentityConfirm"),
-                            confirmText: t("resetIdentityConfirmBtn"),
+                            title: isMe ? t("resetSelfTitle") : t("resetIdentityTitle"),
+                            message: isMe ? t("resetSelfConfirm") : t("resetIdentityConfirm"),
+                            confirmText: isMe ? t("resetSelfConfirmBtn") : t("resetIdentityConfirmBtn"),
                             onConfirm: async () => {
                               const res = await resetParticipantIdentity(eventId, p.id);
                               if (!res.success) {
-                                if (res.error === "CANNOT_RESET_CREATOR") {
-                                  showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: t("cannotResetCreator") });
-                                } else {
-                                  showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: tCommon("unauthorized") || "Không có quyền thực hiện." });
-                                }
+                                showAlert({
+                                  type: "error",
+                                  title: tCommon("error") || "Lỗi",
+                                  message: tCommon("unauthorized") || "Không có quyền thực hiện.",
+                                });
                               } else {
-                                showAlert({ type: "success", title: tCommon("success") || "Thành công", message: t("resetIdentitySuccess") });
+                                showAlert({
+                                  type: "success",
+                                  title: tCommon("success") || "Thành công",
+                                  message: t("resetIdentitySuccess"),
+                                });
                               }
-                            }
+                            },
                           });
                         }}
                       >

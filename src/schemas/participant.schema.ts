@@ -15,10 +15,22 @@ export type AddParticipantInput = z.infer<typeof addParticipantSchema>;
 export const claimIdentitySchema = z.object({
   participantId: z.string().cuid(),
   eventId: z.string().uuid(),
-  // deviceToken KHÔNG validate ở đây — phải đọc từ httpOnly cookie phía server
+  passcode: z.string().optional(),
 });
 
 export type ClaimIdentityInput = z.infer<typeof claimIdentitySchema>;
+
+export const claimCreatorIdentitySchema = z.object({
+  participantId: z.string().cuid(),
+  eventId: z.string().uuid(),
+  passcode: z
+    .string()
+    .min(1, "Vui lòng nhập mã PIN")
+    .regex(/^\d{4,6}$/, "Mã PIN phải gồm 4 đến 6 chữ số"),
+});
+
+export type ClaimCreatorIdentityInput = z.infer<typeof claimCreatorIdentitySchema>;
+
 
 export const PaymentInfoSchema = z.object({
   bankBIN: z.string().min(1).max(100).optional().nullable(),

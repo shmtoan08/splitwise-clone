@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { createEventSchema, updateEventCurrencySchema, updateEventRoundingModeSchema } from "@/schemas/event.schema";
+import { createEventSchema, updateEventCurrencySchema, updateEventRoundingModeSchema, updateEventPasscodeSchema } from "@/schemas/event.schema";
 import { redirect } from "next/navigation";
 import type { ActionResult } from "@/types";
 import { cookies } from "next/headers";
@@ -77,6 +77,7 @@ export async function getEventById(eventId: string) {
         roundingMode: true,
         avgBudget: true,
         creatorDeviceToken: true,
+        passcode: true,
         isAdvancedMode: true,
         isLocked: true,
         seikyuClaimerId: true,
@@ -684,5 +685,47 @@ export async function updateEventRoundingMode(data: unknown): Promise<ActionResu
   } catch (error) {
     console.error("[updateEventRoundingMode] error:", error);
     return { success: false, error: "Lỗi hệ thống khi cập nhật quy tắc làm tròn." };
+  }
+}
+
+export async function updateEventPasscode(data: unknown): Promise<ActionResult> {
+  const parsed = updateEventPasscodeSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: "Mã PIN không hợp lệ (4-6 chữ số)." };
+  }
+
+  const { eventId, passcode } = parsed.data;
+
+  try {
+    const cookieStore = await cookies();
+    const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { creatorDeviceToken: true, isLocked: true },
+    });
+
+    if (!event) {
+      return { success: false, error: "Sự kiện không tồn tại." };
+    }
+
+    if (event.isLocked) {
+      return { success: false, error: "Sự kiện đã bị khóa, không thể thay đổi cài đặt." };
+    }
+
+    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+      return { success: false, error: "unauthorized" };
+    }
+
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { passcode: passcode || null },
+    });
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("[updateEventPasscode] error:", error);
+    return { success: false, error: "Lỗi hệ thống khi cập nhật mã PIN." };
   }
 }

@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { addParticipantSchema, claimIdentitySchema, PaymentInfoSchema, updateFamilyConfigSchema } from "@/schemas/participant.schema";
+import { addParticipantSchema, claimIdentitySchema, claimCreatorIdentitySchema, PaymentInfoSchema, updateFamilyConfigSchema } from "@/schemas/participant.schema";
 import type { ActionResult } from "@/types";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -137,11 +137,86 @@ export async function deleteParticipant(eventId: string, participantId: string):
   }
 }
 
+export async function claimCreatorIdentity(
+  data: unknown
+): Promise<ActionResult> {
+  const parsed = claimCreatorIdentitySchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: "invalid_passcode" };
+  }
+
+  const { participantId, eventId, passcode } = parsed.data;
+  const cookieStore = await cookies();
+  const existingToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, passcode: true, creatorDeviceToken: true },
+    });
+
+    if (!event) {
+      return { success: false, error: "not_found" };
+    }
+
+    if (event.passcode && event.passcode !== passcode) {
+      return { success: false, error: "invalid_passcode" };
+    }
+
+    const participant = await prisma.participant.findUnique({
+      where: { id: participantId, eventId },
+      select: { id: true, name: true, deviceToken: true },
+    });
+
+    if (!participant) {
+      return { success: false, error: "participant_not_found" };
+    }
+
+    if (participant.name === "🏢 Quỹ Công ty") {
+      return { success: false, error: "cannot_claim_fund" };
+    }
+
+    if (participant.deviceToken && participant.deviceToken !== existingToken) {
+      return { success: false, error: "already_claimed" };
+    }
+
+    const tokenToUse = existingToken || randomUUID();
+
+    // Cập nhật đồng thời quyền Creator cho Event và gán deviceToken cho Participant
+    await prisma.$transaction([
+      prisma.event.update({
+        where: { id: eventId },
+        data: { creatorDeviceToken: tokenToUse },
+      }),
+      prisma.participant.update({
+        where: { id: participantId },
+        data: { deviceToken: tokenToUse },
+      }),
+    ]);
+
+    if (!existingToken) {
+      cookieStore.set(DEVICE_TOKEN_COOKIE, tokenToUse, {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+    }
+
+    revalidatePath(`/e/${eventId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("[claimCreatorIdentity] error:", error);
+    return { success: false, error: "system_error" };
+  }
+}
+
 export async function claimParticipantIdentity(
   participantId: string,
-  eventId: string
+  eventId: string,
+  passcode?: string
 ): Promise<ActionResult> {
-  const parsed = claimIdentitySchema.safeParse({ participantId, eventId });
+  const parsed = claimIdentitySchema.safeParse({ participantId, eventId, passcode });
   if (!parsed.success) {
     return { success: false, error: "Dữ liệu không hợp lệ" };
   }
@@ -150,6 +225,11 @@ export async function claimParticipantIdentity(
   const existingToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
 
   try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, passcode: true, creatorDeviceToken: true },
+    });
+
     const participant = await prisma.participant.findUnique({
       where: { id: participantId, eventId },
       select: { id: true, name: true, deviceToken: true },
@@ -170,13 +250,34 @@ export async function claimParticipantIdentity(
       return { success: false, error: "Thành viên này đã được chọn bởi thiết bị khác." };
     }
 
+    // Nếu có mã passcode được cung cấp hoặc nếu event có passcode và người dùng nhập vào
+    if (event?.passcode && passcode) {
+      if (event.passcode !== passcode) {
+        return { success: false, error: "invalid_passcode" };
+      }
+    }
+
     // Reuse existing device token if device already has one, else create new
     const tokenToUse = existingToken || randomUUID();
 
-    await prisma.participant.update({
-      where: { id: participantId },
-      data: { deviceToken: tokenToUse },
-    });
+    // Nếu khớp passcode, trao luôn quyền creatorDeviceToken
+    if (event?.passcode && passcode && event.passcode === passcode) {
+      await prisma.$transaction([
+        prisma.event.update({
+          where: { id: eventId },
+          data: { creatorDeviceToken: tokenToUse },
+        }),
+        prisma.participant.update({
+          where: { id: participantId },
+          data: { deviceToken: tokenToUse },
+        }),
+      ]);
+    } else {
+      await prisma.participant.update({
+        where: { id: participantId },
+        data: { deviceToken: tokenToUse },
+      });
+    }
 
     if (!existingToken) {
       cookieStore.set(DEVICE_TOKEN_COOKIE, tokenToUse, {
@@ -340,13 +441,13 @@ export async function resetParticipantIdentity(
       return { success: false, error: "unauthorized" };
     }
 
-    // 1. Xác thực Creator
+    // 1. Kiểm tra Event
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       select: { creatorDeviceToken: true, isLocked: true },
     });
 
-    if (!event || event.creatorDeviceToken !== deviceToken) {
+    if (!event) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -354,7 +455,7 @@ export async function resetParticipantIdentity(
       return { success: false, error: "Sự kiện đã bị khóa." };
     }
 
-    // 2. Kiểm tra Participant và chặn tự reset chính Creator
+    // 2. Kiểm tra Participant
     const participant = await prisma.participant.findUnique({
       where: { id: participantId },
     });
@@ -363,11 +464,15 @@ export async function resetParticipantIdentity(
       return { success: false, error: "participant_not_found" };
     }
 
-    if (participant.deviceToken === event.creatorDeviceToken) {
-      return { success: false, error: "CANNOT_RESET_CREATOR" };
+    // 3. Quyền hạn: Phải là Creator hoặc chính là người đang liên kết với participant này
+    const isCreator = !!event.creatorDeviceToken && event.creatorDeviceToken === deviceToken;
+    const isSelf = !!participant.deviceToken && participant.deviceToken === deviceToken;
+
+    if (!isCreator && !isSelf) {
+      return { success: false, error: "unauthorized" };
     }
 
-    // 3. Giải phóng deviceToken để thiết bị khác có thể nhận lại
+    // 4. Giải phóng deviceToken để thiết bị khác có thể nhận lại
     await prisma.participant.update({
       where: { id: participantId },
       data: { deviceToken: null },
@@ -380,4 +485,5 @@ export async function resetParticipantIdentity(
     return { success: false, error: "Lỗi hệ thống. Vui lòng thử lại sau." };
   }
 }
+
 
