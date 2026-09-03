@@ -13,14 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Mail, Lock } from "lucide-react";
+import { Link } from "@/i18n/routing";
 
 type LoginFormValues = z.infer<typeof LoginSchema>;
 
 interface LoginFormProps {
   onSuccess?: () => void;
+  onForgotPassword?: () => void;
 }
 
-export function LoginForm({ onSuccess }: LoginFormProps) {
+export function LoginForm({ onSuccess, onForgotPassword }: LoginFormProps) {
   const t = useTranslations("Auth");
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -43,7 +45,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     });
 
     if (result?.error) {
-      if (result.error.includes("email_not_verified") || (result as any).code === "email_not_verified") {
+      if (
+        result.error.includes("email_not_verified") ||
+        (result as any).code === "email_not_verified" ||
+        (result as any).url?.includes("error=email_not_verified")
+      ) {
         setServerError(t("email_not_verified"));
       } else {
         setServerError(t("invalid_credentials"));
@@ -78,7 +84,16 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password" className="text-sm font-medium text-slate-700">{t("password_label")}</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password" className="text-sm font-medium text-slate-700">{t("password_label")}</Label>
+          <Link
+            href="/forgot-password"
+            onClick={onForgotPassword}
+            className="text-xs text-blue-600 hover:text-blue-700 hover:underline font-medium"
+          >
+            {t("forgot_password_link")}
+          </Link>
+        </div>
         <div className="relative">
           <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
           <Input 

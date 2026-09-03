@@ -5,6 +5,7 @@ import { getUserDashboardData } from "@/actions/user";
 import { Link } from "@/i18n/routing";
 import { buttonVariants } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/core/LanguageSwitcher";
+import { UserNav } from "@/components/auth/UserNav";
 import { 
   FolderOpen, 
   Users, 
@@ -89,15 +90,7 @@ export default async function DashboardPage() {
           {/* Cụm phải: Language switcher + User profile */}
           <div className="flex items-center gap-2 sm:gap-3">
             <LanguageSwitcher />
-
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-              <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shadow-2xs">
-                {(session.user.name || session.user.email || "U").charAt(0).toUpperCase()}
-              </div>
-              <span className="text-xs sm:text-sm font-medium text-slate-700 max-w-[120px] sm:max-w-[160px] truncate hidden sm:inline">
-                {session.user.name || session.user.email}
-              </span>
-            </div>
+            <UserNav user={session.user} />
           </div>
         </div>
       </header>

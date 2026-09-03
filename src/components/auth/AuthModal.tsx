@@ -16,6 +16,7 @@ import { RegisterForm } from "./RegisterForm";
 import { useTranslations } from "next-intl";
 import { LogIn, Loader2 } from "lucide-react";
 import { signIn } from "next-auth/react";
+import { Link } from "@/i18n/routing";
 
 interface AuthModalProps {
   triggerText?: string;
@@ -62,7 +63,10 @@ export function AuthModal({ triggerText, variant = "default", className }: AuthM
   const formContent = (
     <div className="px-4 pb-4 md:px-0 md:pb-0">
       {view === "login" ? (
-        <LoginForm onSuccess={handleSuccess} />
+        <LoginForm
+          onSuccess={handleSuccess}
+          onForgotPassword={() => setOpen(false)}
+        />
       ) : (
         <RegisterForm onSuccess={handleSuccess} onGoToLogin={() => setView("login")} />
       )}
@@ -102,16 +106,27 @@ export function AuthModal({ triggerText, variant = "default", className }: AuthM
 
       <div className="mt-6 text-center text-sm text-slate-500">
         {view === "login" ? (
-          <>
-            {t("no_account")}{" "}
-            <button
-              type="button"
-              className="text-primary font-bold hover:underline"
-              onClick={() => setView("register")}
-            >
-              {t("register_link")}
-            </button>
-          </>
+          <div className="space-y-2">
+            <div>
+              <Link
+                href="/forgot-password"
+                onClick={() => setOpen(false)}
+                className="text-xs text-slate-500 hover:text-blue-600 hover:underline transition-colors"
+              >
+                {t("forgot_password_link")}
+              </Link>
+            </div>
+            <div>
+              {t("no_account")}{" "}
+              <button
+                type="button"
+                className="text-primary font-bold hover:underline"
+                onClick={() => setView("register")}
+              >
+                {t("register_link")}
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             {t("has_account")}{" "}

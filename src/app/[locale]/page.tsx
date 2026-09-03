@@ -4,6 +4,7 @@ import CreateEventForm from "@/components/event/CreateEventForm";
 import RecentEventsList from "@/components/event/RecentEventsList";
 import { LanguageSwitcher } from "@/components/core/LanguageSwitcher";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { UserNav } from "@/components/auth/UserNav";
 import { auth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/routing";
@@ -49,14 +50,7 @@ export default async function HomePage() {
             {!session?.user ? (
               <AuthModal variant="ghost" className="rounded-full font-semibold px-4" triggerText={t("Core.login_button")} />
             ) : (
-              <Link href="/dashboard">
-                <Button variant="outline" className="rounded-full flex items-center gap-2 shadow-sm hover:shadow-md hover:border-emerald-300 active:scale-95 transition-all h-9 px-3 sm:px-4 cursor-pointer">
-                  <UserCircle className="w-4 h-4 text-emerald-600" />
-                  <span className="max-w-[100px] sm:max-w-[150px] truncate text-sm font-medium">
-                    {session.user.name || session.user.email || t("Core.my_account")}
-                  </span>
-                </Button>
-              </Link>
+              <UserNav user={session.user} />
             )}
           </div>
         </div>
