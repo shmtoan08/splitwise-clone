@@ -8,6 +8,7 @@ export type ContactItem = {
   id: string;
   name: string;
   email: string | null;
+  contactUserId?: string | null;
 };
 
 export async function getUserContacts(): Promise<ContactItem[]> {
@@ -29,7 +30,28 @@ export async function getUserContacts(): Promise<ContactItem[]> {
       },
     });
 
-    return contacts;
+    // Nếu contact có email, tìm user tương ứng trong hệ thống (nếu có)
+    const emails = contacts
+      .map((c) => c.email)
+      .filter((email): email is string => !!email);
+
+    const userMap = new Map<string, string>();
+    if (emails.length > 0) {
+      const users = await prisma.user.findMany({
+        where: { email: { in: emails } },
+        select: { id: true, email: true },
+      });
+      users.forEach((u) => {
+        if (u.email) userMap.set(u.email.toLowerCase(), u.id);
+      });
+    }
+
+    return contacts.map((c) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      contactUserId: c.email ? userMap.get(c.email.toLowerCase()) || null : null,
+    }));
   } catch (error) {
     console.error("[getUserContacts] Error:", error);
     return [];

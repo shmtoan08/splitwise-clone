@@ -335,7 +335,15 @@
     "create_member_name": "Thêm mới: \"{name}\"",
     "save_to_contacts": "Lưu người này vào danh bạ",
     "saved_in_contacts": "Đã có trong danh bạ",
-    "select_from_contacts": "Chọn từ danh bạ hoặc nhập tên mới"
+    "select_from_contacts": "Chọn từ danh bạ hoặc nhập tên mới",
+    "contactPickerModalTitle": "Chọn từ danh bạ",
+    "contactPickerSearchPlaceholder": "Tìm tên hoặc email...",
+    "contactPickerEmpty": "Không tìm thấy liên hệ nào",
+    "contactPickerNoContacts": "Danh bạ của bạn chưa có liên hệ nào.",
+    "alreadyJoined": "Đã tham gia",
+    "add": "Thêm",
+    "openContactsModal": "Mở danh bạ",
+    "addMemberSuccess": "Đã thêm {name} vào nhóm"
   },
   "participantDetails": {
     "summaryTab": "Tổng kết",

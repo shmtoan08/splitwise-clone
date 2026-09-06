@@ -8,6 +8,7 @@ export const addParticipantSchema = z.object({
     .max(50, "Tên tối đa 50 ký tự")
     .trim(),
   isSelf: z.boolean().default(false).optional(),
+  userId: z.string().optional().nullable(),
 });
 
 export type AddParticipantInput = z.infer<typeof addParticipantSchema>;

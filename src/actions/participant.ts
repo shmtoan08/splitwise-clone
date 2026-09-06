@@ -18,7 +18,7 @@ export async function addParticipant(
     return { success: false, error: "Dữ liệu không hợp lệ" };
   }
 
-  const { eventId, name, isSelf } = parsed.data;
+  const { eventId, name, isSelf, userId: providedUserId } = parsed.data;
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
@@ -42,7 +42,7 @@ export async function addParticipant(
       deviceToken = existingToken ?? randomUUID();
 
       const session = await auth();
-      const userId = session?.user?.id || null;
+      const userId = providedUserId || session?.user?.id || null;
 
       const participant = await prisma.participant.create({
         data: {
@@ -70,7 +70,12 @@ export async function addParticipant(
     } else {
       // Thêm thành viên bình thường (không phải bản thân)
       const participant = await prisma.participant.create({
-        data: { eventId, name, deviceToken: null },
+        data: {
+          eventId,
+          name,
+          deviceToken: null,
+          userId: providedUserId || null,
+        },
         select: { id: true },
       });
       revalidatePath(`/e/${eventId}`, "layout");

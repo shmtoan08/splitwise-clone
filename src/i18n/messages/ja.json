@@ -335,7 +335,15 @@
     "create_member_name": "新規追加: \"{name}\"",
     "save_to_contacts": "このメンバーを連絡先に保存する",
     "saved_in_contacts": "連絡先に保存済み",
-    "select_from_contacts": "連絡先から選択、または新しい名前を入力"
+    "select_from_contacts": "連絡先から選択、または新しい名前を入力",
+    "contactPickerModalTitle": "連絡先から選択",
+    "contactPickerSearchPlaceholder": "名前またはメールで検索...",
+    "contactPickerEmpty": "連絡先が見つかりません",
+    "contactPickerNoContacts": "連絡先はまだ登録されていません。",
+    "alreadyJoined": "参加済み",
+    "add": "追加",
+    "openContactsModal": "連絡先を開く",
+    "addMemberSuccess": "{name}をグループに追加しました"
   },
   "participantDetails": {
     "summaryTab": "サマリー",

@@ -7,12 +7,12 @@ import { addParticipant, deleteParticipant, updateParticipantName, resetParticip
 import { updateParticipantBudgets } from "@/actions/budget";
 import { addContact, getUserContacts, ContactItem } from "@/actions/contact";
 import { useSession } from "next-auth/react";
-import { MemberCombobox } from "./MemberCombobox";
+import ContactPickerModal from "./ContactPickerModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, UserCheck, Loader2, User, Settings2, Users, Wallet, Trash2, Pencil, Search, SlidersHorizontal, X, Lock, RotateCcw } from "lucide-react";
+import { UserPlus, UserCheck, Loader2, User, Settings2, Users, Wallet, Trash2, Pencil, Search, SlidersHorizontal, X, Lock, RotateCcw, BookUser } from "lucide-react";
 import { useAlert } from "@/providers/AlertProvider";
 import PaymentInfoForm from "@/components/event/PaymentInfoForm";
 import GroupManageModal from "./GroupManageModal";
@@ -87,6 +87,8 @@ export default function MembersTabClient({ event, isCreator }: Props) {
   const { data: session, status: sessionStatus } = useSession();
   const [newName, setNewName] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
   const [recentlyAddedId, setRecentlyAddedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openDialogId, setOpenDialogId] = useState<string | null>(null);
@@ -268,6 +270,55 @@ export default function MembersTabClient({ event, isCreator }: Props) {
     } finally {
       setAddingContactId(null);
     }
+  };
+
+  // Logic lọc gợi ý từ danh bạ khi gõ ô input:
+  // - Lọc theo ký tự nhập (case-insensitive)
+  // - Loại bỏ những contact đã có trong sự kiện (participants)
+  const matchingContacts = useMemo(() => {
+    const trimmed = newName.trim().toLowerCase();
+    if (!trimmed) return [];
+
+    const existingLowerNames = realParticipants.map((p) => p.name.trim().toLowerCase());
+    const existingUserIds = realParticipants.map((p) => p.userId).filter(Boolean) as string[];
+
+    return userContacts.filter((c) => {
+      const matchName = c.name.toLowerCase().includes(trimmed);
+      const matchEmail = c.email ? c.email.toLowerCase().includes(trimmed) : false;
+      if (!matchName && !matchEmail) return false;
+
+      const isAlreadyIn =
+        existingLowerNames.includes(c.name.trim().toLowerCase()) ||
+        (c.contactUserId && existingUserIds.includes(c.contactUserId));
+      return !isAlreadyIn;
+    });
+  }, [newName, userContacts, realParticipants]);
+
+  const handleSelectContactSuggestion = async (contact: ContactItem) => {
+    if (isLocked) {
+      showLockedNotice();
+      return;
+    }
+    setIsAdding(true);
+    setError(null);
+    setNewName("");
+    setIsInputFocused(false);
+
+    const result = await addParticipant({
+      eventId,
+      name: contact.name,
+      userId: contact.contactUserId || undefined,
+      isSelf: false,
+    });
+
+    if (!result.success) {
+      setError(result.error);
+    } else {
+      if (result.data?.participantId) {
+        setRecentlyAddedId(result.data.participantId);
+      }
+    }
+    setIsAdding(false);
   };
 
   const handleCreateGroup = () => {
@@ -810,8 +861,6 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                                 } else {
                                   showAlert({ type: "error", title: tCommon("error") || "Lỗi", message: tCommon("unauthorized") || "Không có quyền thực hiện." });
                                 }
-                              } else {
-                                showAlert({ type: "success", title: tCommon("success") || "Thành công", message: t("deleteMemberSuccess") });
                               }
                             }
                           });
@@ -839,27 +888,101 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                 </div>
               )}
               
-              {/* Thanh Input hợp nhất co giãn linh hoạt */}
-              <div className="relative flex items-center bg-white rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-200/90 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all p-1 sm:p-1.5 w-full backdrop-blur-md">
-                <div className="pl-3 pr-1.5 text-slate-400 shrink-0">
-                  <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+              {/* Thanh Input hợp nhất co giãn linh hoạt & Nút mở Modal Danh bạ */}
+              <div className="w-full flex items-center gap-2 max-w-xl min-w-0">
+                <div className="relative flex-1 min-w-0 flex items-center bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-200/90 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all p-1 sm:p-1.5 backdrop-blur-md">
+                  <div className="pl-2.5 sm:pl-3 pr-1 text-slate-400 shrink-0">
+                    <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </div>
+
+                  {/* Dropdown Gợi ý khi nhập (Autocomplete) */}
+                  {isInputFocused && matchingContacts.length > 0 && (
+                    <div className="absolute bottom-full mb-2 left-0 right-0 max-w-full bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl shadow-xl p-1.5 z-30 max-h-48 overflow-y-auto space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                      <div className="px-2.5 py-1 text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+                        <span>{t("contact_suggestions", { fallback: "Gợi ý từ danh bạ" })}</span>
+                        <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full font-bold">
+                          {matchingContacts.length}
+                        </span>
+                      </div>
+                      {matchingContacts.map((contact) => (
+                        <button
+                          key={contact.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectContactSuggestion(contact);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-indigo-50/80 active:bg-indigo-100 transition-colors flex items-center justify-between group cursor-pointer min-w-0"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-indigo-200 transition-colors">
+                              {contact.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-slate-900 text-xs sm:text-sm truncate group-hover:text-indigo-900">
+                                {contact.name}
+                              </p>
+                              {contact.email && (
+                                <p className="text-[10px] text-slate-400 truncate">
+                                  {contact.email}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-[11px] text-indigo-600 font-semibold shrink-0 ml-1.5 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>{t("add", { fallback: "Thêm" })}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onFocus={() => setIsInputFocused(true)}
+                    onBlur={() => {
+                      setTimeout(() => setIsInputFocused(false), 200);
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddMember()}
+                    placeholder={t("addMemberPlaceholder")}
+                    disabled={isAdding}
+                    className="flex-1 w-full min-w-0 h-9 sm:h-10 border-0 shadow-none bg-transparent focus:outline-none text-sm px-1 placeholder:text-slate-400"
+                  />
+
+                  {newName && (
+                    <button
+                      type="button"
+                      onClick={() => setNewName("")}
+                      className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full p-1 mr-1 shrink-0 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  <Button
+                    onClick={handleAddMember}
+                    disabled={isAdding || !newName.trim()}
+                    className="h-9 sm:h-10 px-3.5 sm:px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm active:scale-95 transition-all shrink-0 ml-1 whitespace-nowrap shadow-xs"
+                  >
+                    <span>{t("addButton")}</span>
+                  </Button>
                 </div>
-                
-                <MemberCombobox
-                  value={newName}
-                  onChange={setNewName}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddMember()}
-                  placeholder={t("addMemberPlaceholder")}
-                  disabled={isAdding}
-                  existingNames={realParticipants.map((p) => p.name)}
-                />
-                
+
+                {/* Nút mở Modal Danh bạ */}
                 <Button
-                  onClick={handleAddMember}
-                  disabled={isAdding || !newName.trim()}
-                  className="h-9 sm:h-10 px-4 sm:px-5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm active:scale-95 transition-all shrink-0 ml-1.5 whitespace-nowrap shadow-sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsContactPickerOpen(true)}
+                  className="h-11 sm:h-12 w-11 sm:w-12 rounded-2xl bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-slate-200/90 hover:border-indigo-300 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 p-0 shrink-0 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                  title={t("openContactsModal", { fallback: "Mở danh bạ" })}
                 >
-                  <span>{t("addButton")}</span>
+                  <BookUser className="w-5 h-5" />
+                  <span className="sr-only">
+                    {t("openContactsModal", { fallback: "Mở danh bạ" })}
+                  </span>
                 </Button>
               </div>
             </>
@@ -923,6 +1046,15 @@ export default function MembersTabClient({ event, isCreator }: Props) {
         baseCurrency={baseCurrency}
         avgBudget={avgBudget}
         participants={participants}
+      />
+
+      {/* Modal Chọn từ Danh bạ */}
+      <ContactPickerModal
+        open={isContactPickerOpen}
+        onOpenChange={setIsContactPickerOpen}
+        eventId={eventId}
+        existingParticipants={realParticipants}
+        onSuccess={(participantId) => setRecentlyAddedId(participantId)}
       />
     </div>
   );
