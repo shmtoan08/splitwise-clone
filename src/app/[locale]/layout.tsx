@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AlertProvider } from "@/providers/AlertProvider";
 import { SessionProvider } from "next-auth/react";
+import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner";
 import "../globals.css";
 
 const inter = Inter({ subsets: ["latin", "vietnamese"] });
@@ -46,6 +47,7 @@ export default async function LocaleLayout({ children, params }: Props) {
         <SessionProvider>
           <NextIntlClientProvider messages={messages}>
             <AlertProvider>
+              <ImpersonationBanner />
               {children}
             </AlertProvider>
           </NextIntlClientProvider>

@@ -11,7 +11,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Mail, Lock, MailCheck } from "lucide-react";
+import { Loader2, Mail, Lock, MailCheck, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type RegisterFormValues = z.infer<typeof RegisterSchema>;
@@ -34,7 +34,7 @@ export function RegisterForm({ onSuccess, onGoToLogin }: RegisterFormProps) {
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(RegisterSchema),
-    defaultValues: { email: "", password: "", confirmPassword: "" },
+    defaultValues: { name: "", email: "", password: "", confirmPassword: "" },
   });
 
   async function onSubmit(data: RegisterFormValues) {
@@ -79,6 +79,23 @@ export function RegisterForm({ onSuccess, onGoToLogin }: RegisterFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="reg-name" className="text-sm font-medium text-slate-700">{t("name_label")}</Label>
+        <div className="relative">
+          <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+          <Input 
+            id="reg-name" 
+            type="text" 
+            placeholder={t("name_placeholder")}
+            className="h-12 rounded-xl border-slate-200 bg-slate-50/50 focus-visible:ring-blue-600 focus-visible:bg-white pl-11"
+            {...register("name")}
+          />
+        </div>
+        {errors.name?.message && (
+          <p className="text-sm text-destructive">{t(errors.name.message as any)}</p>
+        )}
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="reg-email" className="text-sm font-medium text-slate-700">{t("email_label")}</Label>
         <div className="relative">

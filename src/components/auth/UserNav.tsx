@@ -12,13 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LayoutDashboard, LogOut, ChevronDown, Loader2 } from "lucide-react";
+import { LayoutDashboard, LogOut, ChevronDown, Loader2, ShieldCheck } from "lucide-react";
 
 interface UserNavProps {
   user: {
     name?: string | null;
     email?: string | null;
     image?: string | null;
+    role?: string | null;
   };
   className?: string;
 }
@@ -89,6 +90,16 @@ export function UserNav({ user, className }: UserNavProps) {
           <LayoutDashboard className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{t("dashboard_button")}</span>
         </DropdownMenuItem>
+
+        {user.role === "ADMIN" && (
+          <DropdownMenuItem
+            className="cursor-pointer px-2.5 py-2 rounded-xl flex items-center gap-2.5 text-sm font-medium text-purple-700 hover:bg-purple-50 hover:text-purple-900 focus:bg-purple-50 focus:text-purple-900 transition-colors"
+            onClick={() => router.push("/admin")}
+          >
+            <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0" />
+            <span>{t("admin_button")}</span>
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator className="my-1 bg-slate-100" />
 

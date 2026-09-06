@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { useSession } from "next-auth/react";
 import { useParticipantIdentity } from "@/hooks/useParticipantIdentity";
 import { claimParticipantIdentity, claimCreatorIdentity, addParticipant } from "@/actions/participant";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,25 +15,57 @@ type Participant = {
   id: string;
   name: string;
   deviceToken: string | null;
+  userId?: string | null;
 };
 
 type Props = {
   eventId: string;
   participants: Participant[];
   hasPasscode?: boolean;
+  forceOpen?: boolean;
+  onClose?: () => void;
+  currentUserName?: string;
 };
 
-export default function ClaimIdentityModal({ eventId, participants, hasPasscode }: Props) {
+export default function ClaimIdentityModal({
+  eventId,
+  participants,
+  hasPasscode,
+  forceOpen,
+  onClose,
+  currentUserName,
+}: Props) {
   const t = useTranslations("participant");
   const tCommon = useTranslations("common");
+  const { data: session } = useSession();
   const { needsIdentityClaim } = useParticipantIdentity(participants);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  const sessionUserName =
+    session?.user?.name ||
+    (session?.user?.email ? session.user.email.split("@")[0] : "");
+  const effectiveUserName =
+    (currentUserName && currentUserName.trim()) ||
+    (sessionUserName && sessionUserName.trim()) ||
+    "";
+
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
+  const [newName, setNewName] = useState(effectiveUserName);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Tự động điền tên người dùng nếu có và người dùng chưa nhập gì
+  useEffect(() => {
+    if (effectiveUserName) {
+      setNewName((prev) => {
+        if (!prev || !prev.trim()) {
+          return effectiveUserName;
+        }
+        return prev;
+      });
+    }
+  }, [effectiveUserName]);
   
   // State nhập PIN bảo vệ Creator
   const [pinTarget, setPinTarget] = useState<Participant | null>(null);
@@ -40,8 +73,8 @@ export default function ClaimIdentityModal({ eventId, participants, hasPasscode 
   
   const [isSkipped, setIsSkipped] = useState(false);
 
-  // Modal sẽ ẩn nếu không cần định danh, HOẶC nếu người dùng đã bấm Bỏ qua
-  if (!needsIdentityClaim || isSkipped) return null;
+  // Modal sẽ ẩn nếu không cần định danh (trừ khi forceOpen), HOẶC nếu người dùng đã bấm Bỏ qua
+  if ((!needsIdentityClaim && !forceOpen) || isSkipped) return null;
 
   // LOGIC: Lọc bỏ tài khoản ảo Quỹ Công ty sinh ra tự động
   const realParticipants = participants.filter((p) => p.name !== "🏢 Quỹ Công ty");
@@ -127,7 +160,15 @@ export default function ClaimIdentityModal({ eventId, participants, hasPasscode 
   const unclaimedParticipants = realParticipants.filter((p) => !p.deviceToken);
 
   return (
-    <Dialog open={true}>
+    <Dialog
+      open={true}
+      onOpenChange={(open) => {
+        if (!open) {
+          setIsSkipped(true);
+          onClose?.();
+        }
+      }}
+    >
       <DialogContent 
         className="sm:max-w-[420px] w-[92vw] rounded-3xl p-6 sm:p-8 [&>button]:hidden border-slate-100 shadow-xl bg-white outline-none"
       > 
@@ -315,6 +356,7 @@ export default function ClaimIdentityModal({ eventId, participants, hasPasscode 
                       router.push("/");
                     } else {
                       setIsSkipped(true);
+                      onClose?.();
                     }
                   }}
                   className="w-full sm:w-auto text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-800 rounded-2xl h-10 px-5 transition-all"

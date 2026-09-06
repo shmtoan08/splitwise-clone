@@ -20,6 +20,7 @@ type Props = {
   currentRoundingMode: "ROUND_ROBIN" | "ROUND_UP";
   initialPasscode?: string | null;
   isCreator: boolean;
+  isUserLinked?: boolean;
 };
 
 export default function EventSettingsButton({
@@ -28,6 +29,7 @@ export default function EventSettingsButton({
   currentRoundingMode,
   initialPasscode,
   isCreator,
+  isUserLinked = false,
 }: Props) {
   const t = useTranslations("settings");
   const tRounding = useTranslations("rounding");
@@ -259,67 +261,69 @@ export default function EventSettingsButton({
               </div>
             </div>
 
-            {/* Section 3: Mã PIN bảo mật Quản trị viên */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                  <KeyRound className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 leading-tight">
-                    {t("passcodeSectionTitle")}
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {t("passcodeSectionDesc")}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <div className="relative flex-1">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    type="password"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    placeholder={t("passcodePlaceholder")}
-                    value={passcode}
-                    onChange={(e) => setPasscode(e.target.value)}
-                    disabled={isPasscodeLoading}
-                    className="h-10 pl-9 rounded-xl bg-slate-50 border-slate-200 text-sm font-medium tracking-widest"
-                  />
+            {/* Section 3: Mã PIN bảo mật Quản trị viên (Chỉ dành cho khách vãng lai chưa liên kết tài khoản User) */}
+            {!isUserLinked && (
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 leading-tight">
+                      {t("passcodeSectionTitle")}
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {t("passcodeSectionDesc")}
+                    </p>
+                  </div>
                 </div>
 
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => handleSavePasscode(passcode.trim())}
-                  disabled={isPasscodeLoading || passcode.trim().length < 4}
-                  className="h-10 px-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shrink-0"
-                >
-                  {isPasscodeLoading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <span>{t("savePasscode")}</span>
-                  )}
-                </Button>
+                <div className="flex items-center gap-2 pt-1">
+                  <div className="relative flex-1">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input
+                      type="password"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      placeholder={t("passcodePlaceholder")}
+                      value={passcode}
+                      onChange={(e) => setPasscode(e.target.value)}
+                      disabled={isPasscodeLoading}
+                      className="h-10 pl-9 rounded-xl bg-slate-50 border-slate-200 text-sm font-medium tracking-widest"
+                    />
+                  </div>
 
-                {initialPasscode && (
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleSavePasscode(null)}
-                    disabled={isPasscodeLoading}
-                    title={t("removePasscode")}
-                    className="h-10 w-10 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 shrink-0"
+                    size="sm"
+                    onClick={() => handleSavePasscode(passcode.trim())}
+                    disabled={isPasscodeLoading || passcode.trim().length < 4}
+                    className="h-10 px-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shrink-0"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {isPasscodeLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <span>{t("savePasscode")}</span>
+                    )}
                   </Button>
-                )}
+
+                  {initialPasscode && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleSavePasscode(null)}
+                      disabled={isPasscodeLoading}
+                      title={t("removePasscode")}
+                      className="h-10 w-10 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
           </div>
 

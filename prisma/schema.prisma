@@ -221,6 +221,11 @@ enum SettlementStatus {
 // NextAuth / Auth.js Models (Phase 3)
 // ---------------------------------------------------------------------------
 
+enum Role {
+  USER
+  ADMIN
+}
+
 model User {
   id            String        @id @default(cuid())
   name          String?
@@ -228,9 +233,11 @@ model User {
   emailVerified DateTime?
   password      String?
   image         String?
+  role          Role          @default(USER)
   accounts      Account[]
   sessions      Session[]
   participants  Participant[] // Một user có thể join nhiều events
+  contacts      Contact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -285,6 +292,23 @@ model PasswordResetToken {
 
   @@unique([email, token])
 }
+
+// ---------------------------------------------------------------------------
+// Contact — Danh bạ thông minh của User (Phase 3)
+// ---------------------------------------------------------------------------
+model Contact {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  email     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
 
 // ---------------------------------------------------------------------------
 // Group & GroupMember — Tag nhóm Flex-Split

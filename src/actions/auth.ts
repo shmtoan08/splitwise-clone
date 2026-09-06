@@ -13,7 +13,7 @@ export async function registerUser(input: unknown): Promise<{ success: boolean; 
       return { success: false, error: parsed.error.issues[0].message };
     }
 
-    const { email, password, locale } = parsed.data;
+    const { name, email, password, locale } = parsed.data;
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
@@ -30,6 +30,7 @@ export async function registerUser(input: unknown): Promise<{ success: boolean; 
     // Create user
     await prisma.user.create({
       data: {
+        name,
         email,
         password: hashedPassword,
       },

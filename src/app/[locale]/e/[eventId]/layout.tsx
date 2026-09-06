@@ -13,6 +13,11 @@ import { getTranslations } from "next-intl/server";
 import RecentEventTracker from "@/components/event/RecentEventTracker";
 import EventTitleHeader from "@/components/event/EventTitleHeader";
 import ClaimEventBanner from "@/components/event/ClaimEventBanner";
+import AdminViewBanner from "@/components/event/AdminViewBanner";
+import EventBackButton from "@/components/event/EventBackButton";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { cn } from "@/lib/utils";
 
 import type { Metadata } from "next";
 
@@ -65,40 +70,74 @@ export default async function EventLayout({ children, params }: Props) {
     notFound();
   }
 
-  // So sánh deviceToken để biết ai là creator
+  // Lấy session xác thực và deviceToken từ cookie
+  const session = await auth();
   const cookieStore = await cookies();
   const deviceToken = cookieStore.get("split-app-device-token")?.value;
-  const isCreator = !!(deviceToken && event.creatorDeviceToken === deviceToken);
 
-  // Tìm participant tương ứng với thiết bị hiện tại
-  const currentParticipant = deviceToken
-    ? event.participants.find((p) => p.deviceToken === deviceToken)
+  // Tìm participant tương ứng: ưu tiên theo User ID nếu đã đăng nhập, fallback sang deviceToken
+  const userParticipant = session?.user?.id
+    ? event.participants.find((p) => p.userId === session.user.id)
     : null;
+
+  const currentParticipant =
+    userParticipant ||
+    (deviceToken
+      ? event.participants.find((p) => p.deviceToken === deviceToken)
+      : null);
+
+  // So sánh quyền Creator: khớp deviceToken HOẶC participant của user chính là creator
+  const isCreator = !!(
+    (deviceToken && event.creatorDeviceToken === deviceToken) ||
+    (userParticipant && userParticipant.deviceToken && userParticipant.deviceToken === event.creatorDeviceToken)
+  );
 
   // Đếm số thành viên thực tế (bỏ qua Quỹ công ty)
   const realMemberCount = event.participants.filter(p => p.name !== "🏢 Quỹ Công ty").length;
 
+  // Kiểm tra quyền Admin và xác định xem Admin đã gắn danh tính (Participant) trong sự kiện chưa
+  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdminParticipant = isAdmin && !!userParticipant;
+  const showAdminBanner = isAdmin && !isAdminParticipant;
+
+  // Kiểm tra xem user hiện tại đã là thành viên trong event chưa (nhận diện theo userId)
+  const isUserParticipant = !!userParticipant;
+
+  // Tên mặc định nếu người dùng đã đăng nhập (Google Auth hoặc Email/Password)
+  let defaultUserName = session?.user?.name || (session?.user?.email ? session.user.email.split("@")[0] : "");
+  if (!defaultUserName && session?.user?.id) {
+    const userInDb = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true, email: true },
+    });
+    if (userInDb) {
+      defaultUserName = userInDb.name || (userInDb.email ? userInDb.email.split("@")[0] : "");
+    }
+  }
+
+  const isImpersonated = !!session?.user?.isImpersonated;
+
   return (
-    <div className="h-dvh bg-slate-50 flex flex-col font-sans overflow-hidden">
+    <div
+      className={cn(
+        "bg-slate-50 flex flex-col font-sans overflow-hidden",
+        isImpersonated ? "h-[calc(100dvh-44px)]" : "h-dvh"
+      )}
+      style={{
+        height: `calc(100dvh - var(--impersonation-banner-height, ${isImpersonated ? "44px" : "0px"}))`,
+      }}
+    >
       
       {/* 1. TOP HEADER: Chỉ chứa điều hướng và công cụ (Rất thoáng) */}
       <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-xl shadow-sm">
         <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex items-center justify-between gap-2">
           
-          {/* CỤM TRÁI: Chỉ còn nút Back */}
+          {/* CỤM TRÁI: Nút Back (về Admin hoặc Trang chủ dựa theo ngữ cảnh) */}
           <div className="flex items-center">
-            <Link 
-              href="/" 
-              className={buttonVariants({ 
-                variant: "ghost", 
-                className: "shrink-0 rounded-full h-10 px-2 sm:px-3 active:scale-95 transition-all -ml-2 hover:bg-slate-100 text-slate-600 hover:text-slate-900 group flex items-center gap-1.5" 
-              })}
-            >
-              <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-0.5" />
-              <span className="hidden sm:block text-sm font-semibold pr-1">
-                {tCommon("home")}
-              </span>
-            </Link>
+            <EventBackButton
+              isAdmin={isAdmin}
+              showAdminBanner={showAdminBanner}
+            />
           </div>
 
           {/* CỤM PHẢI: Các nút công cụ */}
@@ -117,6 +156,7 @@ export default async function EventLayout({ children, params }: Props) {
                 currentRoundingMode={(event.roundingMode as any) || "ROUND_ROBIN"}
                 initialPasscode={event.passcode ?? null}
                 isCreator={isCreator}
+                isUserLinked={!!(currentParticipant?.userId || userParticipant)}
               />
             )}
           </div>
@@ -128,6 +168,16 @@ export default async function EventLayout({ children, params }: Props) {
       <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-0 sm:px-6 lg:px-8 bg-transparent sm:my-6 min-h-0 overflow-hidden relative">
         <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden bg-white sm:shadow-md sm:rounded-3xl sm:border border-slate-200/60">
           
+          {/* Banner dành cho Quản trị viên xem sự kiện */}
+          {showAdminBanner && (
+            <AdminViewBanner
+              eventId={event.id}
+              participants={event.participants}
+              hasPasscode={!!event.passcode}
+              currentUserName={defaultUserName}
+            />
+          )}
+
           {/* 2. SUB-HEADER: Tiêu đề nhóm và đổi tên sự kiện */}
           <EventTitleHeader
             eventId={event.id}
@@ -149,11 +199,14 @@ export default async function EventLayout({ children, params }: Props) {
         </div>
       </main>
 
-      <ClaimIdentityModal
-        eventId={event.id}
-        participants={event.participants}
-        hasPasscode={!!event.passcode}
-      />
+      {!showAdminBanner && !isUserParticipant && (
+        <ClaimIdentityModal
+          eventId={event.id}
+          participants={event.participants}
+          hasPasscode={!!event.passcode}
+          currentUserName={defaultUserName}
+        />
+      )}
       <RecentEventTracker eventId={event.id} title={event.title} />
     </div>
   );

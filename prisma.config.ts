@@ -12,7 +12,7 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
-    // seed: `tsx prisma/seed.ts`, // Uncomment khi có seed file
+    seed: `tsx prisma/seed.ts`, // Uncomment khi có seed file
   },
   datasource: {
     // DIRECT_URL: kết nối trực tiếp (bỏ qua pooler) — dùng cho migrate

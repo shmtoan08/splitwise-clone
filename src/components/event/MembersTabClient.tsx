@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useParticipantIdentity } from "@/hooks/useParticipantIdentity";
 import { addParticipant, deleteParticipant, updateParticipantName, resetParticipantIdentity } from "@/actions/participant";
 import { updateParticipantBudgets } from "@/actions/budget";
+import { addContact, getUserContacts, ContactItem } from "@/actions/contact";
+import { useSession } from "next-auth/react";
+import { MemberCombobox } from "./MemberCombobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, User, Settings2, Users, Wallet, Trash2, Pencil, Search, SlidersHorizontal, X, Lock, RotateCcw } from "lucide-react";
+import { UserPlus, UserCheck, Loader2, User, Settings2, Users, Wallet, Trash2, Pencil, Search, SlidersHorizontal, X, Lock, RotateCcw } from "lucide-react";
 import { useAlert } from "@/providers/AlertProvider";
 import PaymentInfoForm from "@/components/event/PaymentInfoForm";
 import GroupManageModal from "./GroupManageModal";
@@ -31,11 +34,16 @@ type Participant = {
   id: string;
   name: string;
   deviceToken: string | null;
+  userId?: string | null;
   budgetMode?: BudgetMode;
   budget?: number;
   paymentInfo?: PaymentInfo;
   weight?: number;
   familyConfig?: any;
+  user?: {
+    name?: string | null;
+    email?: string | null;
+  } | null;
 };
 
 type Group = {
@@ -65,7 +73,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
   const tCommon = useTranslations("common");
   const tGroup = useTranslations("group");
   const tBudget = useTranslations("budget");
-  const { isCurrentParticipant } = useParticipantIdentity(participants);
+  const { isCurrentParticipant, identity } = useParticipantIdentity(participants);
   const { showAlert } = useAlert();
 
   const showLockedNotice = () => {
@@ -76,11 +84,35 @@ export default function MembersTabClient({ event, isCreator }: Props) {
     });
   };
 
+  const { data: session, status: sessionStatus } = useSession();
   const [newName, setNewName] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [recentlyAddedId, setRecentlyAddedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openDialogId, setOpenDialogId] = useState<string | null>(null);
+
+  // Danh bạ của người dùng hiện tại (khi đã đăng nhập)
+  const [userContacts, setUserContacts] = useState<ContactItem[]>([]);
+  const [addingContactId, setAddingContactId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (sessionStatus === "authenticated") {
+      getUserContacts().then((data) => {
+        if (Array.isArray(data)) {
+          setUserContacts(data);
+        }
+      });
+    } else {
+      setUserContacts([]);
+    }
+  }, [sessionStatus]);
+
+  // Kiểm tra xem người dùng hiện tại có phải là thành viên trong nhóm đã liên kết user id hay không
+  const isCurrentUserLinkedMember = Boolean(
+    sessionStatus === "authenticated" &&
+    session?.user?.id &&
+    participants.some((p) => p.userId === session.user.id)
+  );
   
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
@@ -207,6 +239,35 @@ export default function MembersTabClient({ event, isCreator }: Props) {
     }
     
     setIsAdding(false);
+  };
+
+  const handleAddContact = async (p: Participant) => {
+    if (addingContactId) return;
+    setAddingContactId(p.id);
+    try {
+      const res = await addContact({
+        name: p.name,
+        email: p.user?.email || null,
+      });
+      if (res.success && res.contact) {
+        setUserContacts((prev) => [...prev, res.contact!]);
+        showAlert({
+          type: "success",
+          title: tCommon("success") || "Thành công",
+          message: `${t("saved_in_contacts")}: ${p.name}`,
+        });
+      } else {
+        showAlert({
+          type: "error",
+          title: tCommon("error") || "Lỗi",
+          message: tCommon("system_error") || "Không thể lưu vào danh bạ.",
+        });
+      }
+    } catch (err) {
+      console.error("[handleAddContact] Error:", err);
+    } finally {
+      setAddingContactId(null);
+    }
   };
 
   const handleCreateGroup = () => {
@@ -397,26 +458,26 @@ export default function MembersTabClient({ event, isCreator }: Props) {
       {/* Vùng nội dung cuộn */}
       <div className="flex-1 px-3 sm:px-6 py-4 overflow-y-auto pb-28 sm:pb-36 scrollbar-hide">
         
-        {/* Header Actions Bar (Đã cân bằng lề trái & đổi màu Indigo) */}
+        {/* Header Actions Bar (Cùng 1 dòng trên cả mobile và desktop để tối ưu không gian) */}
         {(isAdvancedMode || participants.length > 2) && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-2 mb-4 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-center justify-between gap-2 mb-3.5 bg-white px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-xs">
             
             {/* Vế Trái: Hiện Tổng ngân sách (Chế độ Nâng cao) HOẶC Tiêu đề + Badge đếm nhóm (Chế độ Cơ bản) */}
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               {isAdvancedMode ? (
                 <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 truncate">
                   <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{tBudget("totalBudget", { fallback: "Tổng ngân sách" })}:</span>
-                  <span className="font-bold text-slate-900 font-mono sm:font-sans">
+                  <span className="truncate">{tBudget("totalBudget", { fallback: "Tổng ngân sách" })}:</span>
+                  <span className="font-bold text-slate-900 font-mono sm:font-sans shrink-0">
                     {formatCurrency(totalBudget, { currency: baseCurrency })}
                   </span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-800">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-bold text-slate-800 min-w-0">
                   <Users className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span>Thành viên & Nhóm</span>
+                  <span className="truncate">Thành viên & Nhóm</span>
                   {groups.length > 0 && (
-                    <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                    <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100 shrink-0">
                       {groups.length} nhóm
                     </span>
                   )}
@@ -424,15 +485,15 @@ export default function MembersTabClient({ event, isCreator }: Props) {
               )}
             </div>
 
-            {/* Vế Phải: Cụm nút hành động (Trải đều/căn phải linh hoạt trên mobile) */}
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+            {/* Vế Phải: Cụm nút hành động */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {participants.length > 2 && (
                 <Button
                   onClick={handleCreateGroup}
                   variant="outline"
-                  className="rounded-full bg-indigo-50/80 border-indigo-200/80 text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all text-xs h-8 px-3 font-semibold shadow-2xs"
+                  className="rounded-full bg-indigo-50/80 border-indigo-200/80 text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all text-xs h-8 px-2.5 sm:px-3 font-semibold shadow-2xs shrink-0"
                 >
-                  <Users className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
+                  <Users className="w-3.5 h-3.5 mr-1 sm:mr-1.5 text-indigo-500 shrink-0" />
                   <span>{tGroup("createGroup")}</span>
                 </Button>
               )}
@@ -441,7 +502,7 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                 <Button
                   onClick={openBudgetModal}
                   variant="outline"
-                  className="rounded-full bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all text-xs h-8 px-3 font-semibold"
+                  className="rounded-full bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all text-xs h-8 px-2.5 sm:px-3 font-semibold shrink-0"
                 >
                   {tBudget("manageBudget", { fallback: "Quản lý Ngân sách" })}
                 </Button>
@@ -616,6 +677,42 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                       )}
                     </Button>
 
+                    {/* Nút Thêm vào danh bạ (Chỉ hiện khi viewer đã liên kết user id và target member cũng đã liên kết user id) */}
+                    {isCurrentUserLinkedMember && !!p.userId && !isMe && p.name !== "🏢 Quỹ Công ty" && (() => {
+                      const isContactSaved = userContacts.some(
+                        (c) =>
+                          c.name.toLowerCase() === p.name.toLowerCase() ||
+                          (p.user?.email && c.email && c.email.toLowerCase() === p.user.email.toLowerCase())
+                      );
+                      const isAddingThis = addingContactId === p.id;
+
+                      return (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={isContactSaved || isAddingThis}
+                          onClick={() => handleAddContact(p)}
+                          className={`shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full active:scale-95 transition-all ${
+                            isContactSaved
+                              ? "text-emerald-600 bg-emerald-50/80 hover:bg-emerald-50/80 cursor-default"
+                              : "text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                          }`}
+                          title={isContactSaved ? t("saved_in_contacts") : t("save_to_contacts")}
+                        >
+                          {isAddingThis ? (
+                            <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-indigo-600" />
+                          ) : isContactSaved ? (
+                            <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
+                          ) : (
+                            <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          )}
+                          <span className="sr-only">
+                            {isContactSaved ? t("saved_in_contacts") : t("save_to_contacts")}
+                          </span>
+                        </Button>
+                      );
+                    })()}
+
                     {/* Nút Cài đặt tài khoản nhận tiền (cho bản thân) */}
                     {isMe && (
                       <Dialog open={openDialogId === p.id} onOpenChange={(open) => setOpenDialogId(open ? p.id : null)}>
@@ -646,8 +743,8 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                       </Dialog>
                     )}
 
-                    {/* Nút Hủy liên kết thiết bị (Reset vai trò) */}
-                    {(isCreator || isMe) && !!p.deviceToken && p.name !== "🏢 Quỹ Công ty" && (
+                    {/* Nút Hủy liên kết thiết bị (Reset vai trò) - chỉ áp dụng cho khách vãng lai chưa liên kết tài khoản User */}
+                    {(isCreator || isMe) && !!p.deviceToken && !p.userId && p.name !== "🏢 Quỹ Công ty" && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -748,13 +845,13 @@ export default function MembersTabClient({ event, isCreator }: Props) {
                   <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 
-                <Input
+                <MemberCombobox
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  onChange={setNewName}
                   onKeyDown={(e) => e.key === "Enter" && handleAddMember()}
                   placeholder={t("addMemberPlaceholder")}
-                  className="flex-1 h-9 sm:h-10 border-0 shadow-none bg-transparent focus-visible:ring-0 text-base sm:text-sm px-0 placeholder:text-slate-400 min-w-0"
                   disabled={isAdding}
+                  existingNames={realParticipants.map((p) => p.name)}
                 />
                 
                 <Button

@@ -448,13 +448,21 @@ export default function SettlementTabClient({ event, isCreator = false }: Props)
         )}
 
         {/* === 3. DANH SÁCH GIAO DỊCH (SETTLEMENT ROWS) === */}
-        {enrichedTransactions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-8 text-center text-slate-500 bg-white border border-slate-200/80 rounded-3xl shadow-sm animate-in fade-in duration-500 mt-4">
-            <div className="w-16 h-16 mb-3 rounded-full bg-emerald-100 border-4 border-emerald-50 flex items-center justify-center shadow-sm">
+        {expenses.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-8 sm:p-10 text-center text-slate-500 bg-white border border-slate-200/80 rounded-3xl shadow-sm animate-in fade-in duration-500 mt-4">
+            <div className="w-16 h-16 mb-3.5 rounded-full bg-slate-100 border-4 border-slate-50 flex items-center justify-center shadow-sm text-slate-400">
+              <Receipt className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1.5">{t("noExpensesTitle")}</h3>
+            <p className="text-xs sm:text-sm font-medium text-slate-500 max-w-sm leading-relaxed">{t("noExpensesDesc")}</p>
+          </div>
+        ) : enrichedTransactions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-8 sm:p-10 text-center text-slate-500 bg-white border border-slate-200/80 rounded-3xl shadow-sm animate-in fade-in duration-500 mt-4">
+            <div className="w-16 h-16 mb-3.5 rounded-full bg-emerald-100 border-4 border-emerald-50 flex items-center justify-center shadow-sm">
               <PartyPopper className="w-8 h-8 text-emerald-600" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">{t("allSettledTitle")}</h3>
-            <p className="text-xs font-medium text-slate-500">{t("allSettledDesc")}</p>
+            <h3 className="text-lg font-bold text-slate-900 mb-1.5">{t("allSettledTitle")}</h3>
+            <p className="text-xs sm:text-sm font-medium text-slate-500 leading-relaxed">{t("allSettledDesc")}</p>
           </div>
         ) : filteredEnrichedTransactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-slate-400 bg-white border border-slate-200/80 rounded-3xl shadow-sm animate-in fade-in duration-300">

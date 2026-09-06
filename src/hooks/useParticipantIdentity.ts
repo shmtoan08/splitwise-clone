@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import { useParams } from "next/navigation";
+import { syncDeviceTokenToUserParticipant } from "@/actions/participant";
 import type { ParticipantIdentity } from "@/types";
 
 const DEVICE_TOKEN_COOKIE = "split-app-device-token";
@@ -18,48 +21,88 @@ function getCookieValue(name: string): string | null {
 }
 
 /**
- * Hook quản lý "soft identity" — biết mình là participant nào trong event hiện tại.
+ * Hook quản lý danh tính người dùng trong sự kiện (Identity Resolution).
  *
- * Flow:
- * 1. Đọc deviceToken từ cookie trên thiết bị
- * 2. So sánh với participants của event (từ props)
- * 3. Nếu khớp → tự động nhận diện "bạn là X"
- * 4. Nếu chưa có token → hiển thị modal "Bạn là ai?"
- *
- * NOTE: deviceToken trong cookie chỉ dùng để đọc ở client.
- * Mọi thao tác nhạy cảm (markAsPaid, confirmReceived) đều validate token từ cookie
- * phía SERVER trong Server Action — không tin giá trị gửi từ client.
+ * Cơ chế ưu tiên:
+ * 1. Nếu người dùng ĐÃ ĐĂNG NHẬP (authenticated): Ưu tiên khớp theo User ID (userId).
+ *    -> Giúp cùng 1 tài khoản đăng nhập trên bất kỳ thiết bị nào cũng nhận diện được ngay, không bị hiện modal "Bạn là ai".
+ * 2. Fallback cho khách vãng lai: Khớp theo deviceToken lưu trong cookie thiết bị.
+ * 3. Tự động đồng bộ deviceToken cho thiết bị mới nếu user đã đăng nhập.
  *
  * @param participants - Danh sách participants của event hiện tại
  */
 export function useParticipantIdentity(
-  participants: Array<{ id: string; name: string; deviceToken: string | null }>
+  participants: Array<{
+    id: string;
+    name: string;
+    deviceToken: string | null;
+    userId?: string | null;
+  }>
 ) {
+  const { data: session, status } = useSession();
+  const params = useParams();
+  const eventId = params?.eventId as string | undefined;
+
   const [identity, setIdentity] = useState<ParticipantIdentity | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const deviceToken = getCookieValue(DEVICE_TOKEN_COOKIE);
-
-    if (!deviceToken) {
-      setIsLoading(false);
+    // Nếu session đang tải, giữ trạng thái loading để tránh flash modal
+    if (status === "loading") {
+      setIsLoading(true);
       return;
     }
 
-    // Tìm participant khớp deviceToken trên thiết bị này (bỏ qua tài khoản ảo Quỹ Công ty)
-    const matched = participants.find((p) => p.deviceToken === deviceToken && p.name !== "🏢 Quỹ Công ty");
+    const deviceToken = getCookieValue(DEVICE_TOKEN_COOKIE);
 
-    if (matched) {
-      setIdentity({
-        participantId: matched.id,
-        name: matched.name,
-        deviceToken,
-        isClaimed: true,
-      });
+    // Bước 1 (Ưu tiên cao nhất): Nếu đã đăng nhập, tìm theo userId
+    if (status === "authenticated" && session?.user?.id) {
+      const matchedByUser = participants.find(
+        (p) => p.userId === session.user.id && p.name !== "🏢 Quỹ Công ty"
+      );
+
+      if (matchedByUser) {
+        const effectiveToken = matchedByUser.deviceToken || deviceToken || "";
+        setIdentity({
+          participantId: matchedByUser.id,
+          name: matchedByUser.name,
+          deviceToken: effectiveToken,
+          isClaimed: true,
+        });
+        setIsLoading(false);
+
+        // Tự động đồng bộ deviceToken cho trình duyệt mới nếu chưa khớp
+        if (eventId && (!deviceToken || deviceToken !== matchedByUser.deviceToken)) {
+          syncDeviceTokenToUserParticipant(eventId).catch((err) => {
+            console.error("[useParticipantIdentity] sync deviceToken error:", err);
+          });
+        }
+        return;
+      }
     }
 
+    // Bước 2 (Fallback cho khách vãng lai hoặc chưa liên kết userId): Tìm theo deviceToken
+    if (deviceToken) {
+      const matchedByDevice = participants.find(
+        (p) => p.deviceToken === deviceToken && p.name !== "🏢 Quỹ Công ty"
+      );
+
+      if (matchedByDevice) {
+        setIdentity({
+          participantId: matchedByDevice.id,
+          name: matchedByDevice.name,
+          deviceToken,
+          isClaimed: true,
+        });
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    // Không khớp với bất kỳ participant nào
+    setIdentity(null);
     setIsLoading(false);
-  }, [participants]);
+  }, [participants, session?.user?.id, status, eventId]);
 
   /**
    * Lấy deviceToken từ cookie client-side (dùng để hiển thị UI điều kiện).
@@ -70,15 +113,11 @@ export function useParticipantIdentity(
   }, []);
 
   /**
-   * Kiểm tra nhanh xem thiết bị hiện tại có phải là participant với id cho trước không.
-   * Dùng để ẩn/hiện nút action (markAsPaid, confirmReceived) ở UI.
-   *
-   * QUAN TRỌNG: Đây chỉ là UI hint, KHÔNG phải security check.
-   * Security check thật sự xảy ra ở Server Action.
+   * Kiểm tra nhanh xem thiết bị/user hiện tại có phải là participant với id cho trước không.
    */
   const isCurrentParticipant = useCallback(
     (participantId: string): boolean => {
-      return identity?.participantId === participantId;
+      return !!identity && identity.participantId === participantId;
     },
     [identity]
   );
@@ -88,7 +127,11 @@ export function useParticipantIdentity(
     isLoading,
     isCurrentParticipant,
     getDeviceToken,
-    /** Chưa claim identity (chưa chọn tên trên thiết bị này) */
-    needsIdentityClaim: !isLoading && !identity,
+    /**
+     * Chỉ cần claim identity khi:
+     * 1. Session đã load xong (status !== "loading" và !isLoading)
+     * 2. Không nhận diện được participant nào (chưa có identity)
+     */
+    needsIdentityClaim: !isLoading && status !== "loading" && !identity,
   };
 }

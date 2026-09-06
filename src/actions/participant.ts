@@ -41,11 +41,15 @@ export async function addParticipant(
       const existingToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
       deviceToken = existingToken ?? randomUUID();
 
+      const session = await auth();
+      const userId = session?.user?.id || null;
+
       const participant = await prisma.participant.create({
         data: {
           eventId,
           name,
           deviceToken,
+          userId,
         },
         select: { id: true },
       });
@@ -60,6 +64,7 @@ export async function addParticipant(
         });
       }
 
+      revalidatePath(`/e/${eventId}`, "layout");
       revalidatePath(`/e/${eventId}`);
       return { success: true, data: { participantId: participant.id } };
     } else {
@@ -68,6 +73,7 @@ export async function addParticipant(
         data: { eventId, name, deviceToken: null },
         select: { id: true },
       });
+      revalidatePath(`/e/${eventId}`, "layout");
       revalidatePath(`/e/${eventId}`);
       return { success: true, data: { participantId: participant.id } };
     }
@@ -151,6 +157,9 @@ export async function claimCreatorIdentity(
   const existingToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
 
   try {
+    const session = await auth();
+    const userId = session?.user?.id || null;
+
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       select: { id: true, passcode: true, creatorDeviceToken: true },
@@ -183,7 +192,7 @@ export async function claimCreatorIdentity(
 
     const tokenToUse = existingToken || randomUUID();
 
-    // Cập nhật đồng thời quyền Creator cho Event và gán deviceToken cho Participant
+    // Cập nhật đồng thời quyền Creator cho Event và gán deviceToken (kèm userId nếu đã đăng nhập) cho Participant
     await prisma.$transaction([
       prisma.event.update({
         where: { id: eventId },
@@ -191,7 +200,10 @@ export async function claimCreatorIdentity(
       }),
       prisma.participant.update({
         where: { id: participantId },
-        data: { deviceToken: tokenToUse },
+        data: {
+          deviceToken: tokenToUse,
+          ...(userId ? { userId } : {}),
+        },
       }),
     ]);
 
@@ -204,6 +216,7 @@ export async function claimCreatorIdentity(
       });
     }
 
+    revalidatePath(`/e/${eventId}`, "layout");
     revalidatePath(`/e/${eventId}`);
     return { success: true, data: undefined };
   } catch (error) {
@@ -226,6 +239,9 @@ export async function claimParticipantIdentity(
   const existingToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
 
   try {
+    const session = await auth();
+    const userId = session?.user?.id || null;
+
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       select: { id: true, passcode: true, creatorDeviceToken: true },
@@ -233,7 +249,7 @@ export async function claimParticipantIdentity(
 
     const participant = await prisma.participant.findUnique({
       where: { id: participantId, eventId },
-      select: { id: true, name: true, deviceToken: true },
+      select: { id: true, name: true, deviceToken: true, userId: true },
     });
 
     if (!participant) {
@@ -246,6 +262,14 @@ export async function claimParticipantIdentity(
 
     if (participant.deviceToken) {
       if (participant.deviceToken === existingToken) {
+        if (userId && !participant.userId) {
+          await prisma.participant.update({
+            where: { id: participantId },
+            data: { userId },
+          });
+          revalidatePath(`/e/${eventId}`, "layout");
+          revalidatePath(`/e/${eventId}`);
+        }
         return { success: true, data: undefined };
       }
       return { success: false, error: "Thành viên này đã được chọn bởi thiết bị khác." };
@@ -270,13 +294,19 @@ export async function claimParticipantIdentity(
         }),
         prisma.participant.update({
           where: { id: participantId },
-          data: { deviceToken: tokenToUse },
+          data: {
+            deviceToken: tokenToUse,
+            ...(userId ? { userId } : {}),
+          },
         }),
       ]);
     } else {
       await prisma.participant.update({
         where: { id: participantId },
-        data: { deviceToken: tokenToUse },
+        data: {
+          deviceToken: tokenToUse,
+          ...(userId ? { userId } : {}),
+        },
       });
     }
 
@@ -289,6 +319,7 @@ export async function claimParticipantIdentity(
       });
     }
 
+    revalidatePath(`/e/${eventId}`, "layout");
     revalidatePath(`/e/${eventId}`);
     return { success: true, data: undefined };
   } catch (error) {
@@ -527,6 +558,108 @@ export async function linkParticipantToUser(
     return { success: true, data: { participantId: participant.id } };
   } catch (error) {
     console.error("[linkParticipantToUser] error:", error);
+    return { success: false, error: "system_error" };
+  }
+}
+
+/**
+ * Tự động đồng bộ deviceToken trên trình duyệt mới cho User đã liên kết Participant trong Event.
+ * Đảm bảo participant.deviceToken và creatorDeviceToken luôn khớp với cookie hiện tại trên trình duyệt.
+ */
+export async function syncDeviceTokenToUserParticipant(
+  eventId: string
+): Promise<ActionResult<{ deviceToken: string }>> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "unauthorized" };
+    }
+
+    const cookieStore = await cookies();
+    let currentCookieToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+
+    if (!currentCookieToken) {
+      currentCookieToken = randomUUID();
+      cookieStore.set(DEVICE_TOKEN_COOKIE, currentCookieToken, {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+    }
+
+    const participant = await prisma.participant.findFirst({
+      where: {
+        eventId,
+        userId: session.user.id,
+      },
+      select: {
+        id: true,
+        deviceToken: true,
+        event: {
+          select: {
+            creatorDeviceToken: true,
+          },
+        },
+      },
+    });
+
+    if (!participant) {
+      return { success: false, error: "participant_not_found" };
+    }
+
+    // Nếu deviceToken của participant chưa khớp với cookie trên trình duyệt này
+    if (participant.deviceToken !== currentCookieToken) {
+      // Kiểm tra xem token này đã bị participant khác trong cùng event giữ chưa (đảm bảo unique [eventId, deviceToken])
+      const tokenInUse = await prisma.participant.findFirst({
+        where: {
+          eventId,
+          deviceToken: currentCookieToken,
+          id: { not: participant.id },
+        },
+      });
+
+      const tokenToSet = tokenInUse ? randomUUID() : currentCookieToken;
+
+      if (tokenToSet !== currentCookieToken) {
+        cookieStore.set(DEVICE_TOKEN_COOKIE, tokenToSet, {
+          path: "/",
+          maxAge: 60 * 60 * 24 * 365,
+          httpOnly: false,
+          sameSite: "lax",
+        });
+      }
+
+      const isCreator =
+        !!participant.deviceToken &&
+        participant.event.creatorDeviceToken === participant.deviceToken;
+
+      if (isCreator) {
+        await prisma.$transaction([
+          prisma.event.update({
+            where: { id: eventId },
+            data: { creatorDeviceToken: tokenToSet },
+          }),
+          prisma.participant.update({
+            where: { id: participant.id },
+            data: { deviceToken: tokenToSet },
+          }),
+        ]);
+      } else {
+        await prisma.participant.update({
+          where: { id: participant.id },
+          data: { deviceToken: tokenToSet },
+        });
+      }
+
+      revalidatePath(`/e/${eventId}`, "layout");
+      revalidatePath(`/e/${eventId}`);
+      return { success: true, data: { deviceToken: tokenToSet } };
+    }
+
+    return { success: true, data: { deviceToken: currentCookieToken } };
+  } catch (error) {
+    console.error("[syncDeviceTokenToUserParticipant] error:", error);
     return { success: false, error: "system_error" };
   }
 }

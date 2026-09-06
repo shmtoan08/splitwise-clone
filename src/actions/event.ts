@@ -100,6 +100,12 @@ export async function getEventById(eventId: string) {
                 accountName: true,
                 paypayLink: true,
               }
+            },
+            user: {
+              select: {
+                name: true,
+                email: true,
+              }
             }
           }
         },

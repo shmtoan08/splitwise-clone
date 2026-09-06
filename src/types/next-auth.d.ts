@@ -1,11 +1,29 @@
-import "next-auth";
+import { DefaultSession } from "next-auth";
 
-// Augment NextAuth types để thêm id vào Session.user
-// Tham khảo: https://authjs.dev/getting-started/typescript
+export type UserRole = "USER" | "ADMIN";
+
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
+      role: UserRole;
+      isImpersonated?: boolean;
+      originalAdminId?: string;
     } & DefaultSession["user"];
   }
+
+  interface User {
+    role?: UserRole;
+    isImpersonated?: boolean;
+    originalAdminId?: string;
+  }
 }
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id?: string;
+    role?: UserRole;
+    name?: string | null;
+  }
+}
+
