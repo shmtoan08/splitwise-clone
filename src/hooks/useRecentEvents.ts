@@ -62,5 +62,20 @@ export function useRecentEvents() {
     });
   }, []);
 
-  return { recentEvents, addRecentEvent, removeRecentEvent };
+  /** Giữ lại những event nằm trong danh sách hợp lệ */
+  const syncValidEvents = useCallback((validIds: string[]) => {
+    setRecentEvents((prev) => {
+      const updated = prev.filter((e) => validIds.includes(e.id));
+      if (updated.length !== prev.length) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+      }
+      return updated;
+    });
+  }, []);
+
+  return { recentEvents, addRecentEvent, removeRecentEvent, syncValidEvents };
 }

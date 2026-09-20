@@ -30,5 +30,10 @@ export default async function EventPage({ params }: Props) {
     (userParticipant && userParticipant.deviceToken && userParticipant.deviceToken === event.creatorDeviceToken)
   );
 
-  return <EventTabsClient event={event} isCreator={isCreator} />;
+  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdminParticipant = isAdmin && !!userParticipant;
+  const isAdminOverride = isAdmin && !isAdminParticipant && !session?.user?.isImpersonated;
+  const isEffectiveCreator = isCreator || isAdminOverride;
+
+  return <EventTabsClient event={event} isCreator={isEffectiveCreator} />;
 }

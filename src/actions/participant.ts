@@ -3,12 +3,36 @@
 import { prisma } from "@/lib/prisma";
 import { addParticipantSchema, claimIdentitySchema, claimCreatorIdentitySchema, PaymentInfoSchema, updateFamilyConfigSchema } from "@/schemas/participant.schema";
 import type { ActionResult } from "@/types";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import { auth } from "@/lib/auth";
+import { UAParser } from "ua-parser-js";
 
 const DEVICE_TOKEN_COOKIE = "split-app-device-token";
+
+async function getDeviceInfo() { 
+  const headersList = await headers(); 
+  const ua = headersList.get("user-agent") || ""; 
+  const parser = new UAParser(ua); 
+  const browser = parser.getBrowser().name; 
+  const os = parser.getOS().name; 
+  if (browser && os) return `${browser} on ${os}`; 
+  if (browser) return browser; 
+  if (os) return os; 
+  return null; 
+}
+/**
+ * Kiểm tra session hiện tại có phải là ADMIN không (và không phải đang impersonate).
+ */
+async function checkIsAdminSession(): Promise<boolean> {
+  const session = await auth();
+  if (!session?.user) return false;
+  if (session.user.role !== "ADMIN") return false;
+  if (session.user.isImpersonated) return false;
+  return true;
+}
+
 
 export async function addParticipant(
   data: unknown
@@ -43,6 +67,7 @@ export async function addParticipant(
 
       const session = await auth();
       const userId = providedUserId || session?.user?.id || null;
+      const deviceInfo = await getDeviceInfo();
 
       const participant = await prisma.participant.create({
         data: {
@@ -50,6 +75,7 @@ export async function addParticipant(
           name,
           deviceToken,
           userId,
+          deviceInfo,
         },
         select: { id: true },
       });
@@ -91,8 +117,9 @@ export async function addParticipant(
 export async function deleteParticipant(eventId: string, participantId: string): Promise<ActionResult> {
   const cookieStore = await cookies();
   const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+  const isAdmin = await checkIsAdminSession();
 
-  if (!deviceToken) {
+  if (!isAdmin && !deviceToken) {
     return { success: false, error: "unauthorized" };
   }
 
@@ -101,7 +128,7 @@ export async function deleteParticipant(eventId: string, participantId: string):
     select: { creatorDeviceToken: true, isLocked: true },
   });
 
-  if (!event || event.creatorDeviceToken !== deviceToken) {
+  if (!event || (!isAdmin && event.creatorDeviceToken !== deviceToken)) {
     return { success: false, error: "unauthorized" };
   }
 
@@ -287,8 +314,8 @@ export async function claimParticipantIdentity(
       }
     }
 
-    // Reuse existing device token if device already has one, else create new
     const tokenToUse = existingToken || randomUUID();
+    const deviceInfo = await getDeviceInfo();
 
     // Nếu khớp passcode, trao luôn quyền creatorDeviceToken
     if (event?.passcode && passcode && event.passcode === passcode) {
@@ -301,6 +328,7 @@ export async function claimParticipantIdentity(
           where: { id: participantId },
           data: {
             deviceToken: tokenToUse,
+            deviceInfo,
             ...(userId ? { userId } : {}),
           },
         }),
@@ -310,6 +338,7 @@ export async function claimParticipantIdentity(
         where: { id: participantId },
         data: {
           deviceToken: tokenToUse,
+          deviceInfo,
           ...(userId ? { userId } : {}),
         },
       });
@@ -473,8 +502,9 @@ export async function resetParticipantIdentity(
   try {
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+    const isAdmin = await checkIsAdminSession();
 
-    if (!deviceToken) {
+    if (!isAdmin && !deviceToken) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -501,11 +531,11 @@ export async function resetParticipantIdentity(
       return { success: false, error: "participant_not_found" };
     }
 
-    // 3. Quyền hạn: Phải là Creator hoặc chính là người đang liên kết với participant này
+    // 3. Quyền hạn: Admin có toàn quyền; hoặc phải là Creator hoặc chính người liên kết
     const isCreator = !!event.creatorDeviceToken && event.creatorDeviceToken === deviceToken;
     const isSelf = !!participant.deviceToken && participant.deviceToken === deviceToken;
 
-    if (!isCreator && !isSelf) {
+    if (!isAdmin && !isCreator && !isSelf) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -522,6 +552,7 @@ export async function resetParticipantIdentity(
     return { success: false, error: "Lỗi hệ thống. Vui lòng thử lại sau." };
   }
 }
+
 
 export async function linkParticipantToUser(
   eventId: string

@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserActionsDropdown } from "@/components/admin/UserActionsDropdown";
 import { FloatingActionBar } from "@/components/admin/FloatingActionBar";
+import { UserEventsSheet } from "@/components/admin/UserEventsSheet";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -56,6 +57,8 @@ export function UsersTableClient({
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selectedUserIdForEvents, setSelectedUserIdForEvents] = useState<string | null>(null);
+
 
   const formatDate = (date: Date) => {
     try {
@@ -254,20 +257,21 @@ export function UsersTableClient({
 
                 {/* Hàng 3: Metadata (Số nhóm & Ngày đăng ký) */}
                 <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100/80 pl-7">
-                  <div className="flex items-center gap-1.5">
-                    <FolderOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>
-                      {t("events_count", {
-                        count: user._count.participants,
-                      })}
-                    </span>
-                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setSelectedUserIdForEvents(user.id)}
+                    className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 hover:underline transition-all cursor-pointer font-medium px-2 py-1 -ml-2 rounded-md hover:bg-blue-50 focus:outline-none"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 shrink-0"/>
+                    <span>{t("events_count", { count: user._count.participants })}</span>
+                  </button>
 
                   <div className="flex items-center gap-1 text-[11px] text-slate-400">
                     <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
                     <span>{formatDate(user.createdAt)}</span>
                   </div>
                 </div>
+
               </div>
             );
           })}
@@ -398,15 +402,16 @@ export function UsersTableClient({
 
                   {/* Cột 4: Số nhóm */}
                   <TableCell className="py-3.5 text-slate-600 text-sm">
-                    <div className="flex items-center gap-1.5">
-                      <FolderOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>
-                        {t("events_count", {
-                          count: user._count.participants,
-                        })}
-                      </span>
-                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => setSelectedUserIdForEvents(user.id)}
+                      className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 hover:underline transition-all cursor-pointer font-medium px-2 py-1 -ml-2 rounded-md hover:bg-blue-50 focus:outline-none"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 shrink-0"/>
+                      <span>{t("events_count", { count: user._count.participants })}</span>
+                    </button>
                   </TableCell>
+
 
                   {/* Cột 5: Ngày tham gia */}
                   <TableCell className="py-3.5 text-xs text-slate-500 whitespace-nowrap">
@@ -489,6 +494,14 @@ export function UsersTableClient({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sheet xem nhanh danh sách nhóm */}
+      <UserEventsSheet
+        userId={selectedUserIdForEvents}
+        isOpen={Boolean(selectedUserIdForEvents)}
+        onClose={() => setSelectedUserIdForEvents(null)}
+      />
     </>
   );
 }
+

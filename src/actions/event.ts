@@ -9,6 +9,20 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import { v2 as cloudinary } from "cloudinary";
 import { deleteReceiptFromCloudinary } from "@/actions/expense";
+import { auth } from "@/lib/auth";
+
+/**
+ * Kiểm tra session hiện tại có phải là ADMIN không (và không phải đang impersonate).
+ * Dùng để bypass kiểm tra deviceToken/creatorDeviceToken trong các Server Actions.
+ */
+async function checkIsAdminSession(): Promise<boolean> {
+  const session = await auth();
+  if (!session?.user) return false;
+  if (session.user.role !== "ADMIN") return false;
+  // Khi đang impersonate một user khác, không áp dụng Admin override
+  if (session.user.isImpersonated) return false;
+  return true;
+}
 
 // Cấu hình Cloudinary SDK ở Server
 cloudinary.config({
@@ -237,11 +251,12 @@ export async function getEventSummary(eventId: string): Promise<
       return { success: false, error: "not_found" };
     }
 
-    // Security: kiểm tra deviceToken khớp participant hoặc creator
+    // Security: kiểm tra deviceToken khớp participant hoặc creator, hoặc role ADMIN
+    const isAdmin = await checkIsAdminSession();
     const isParticipant = !!deviceToken && event.participants.some((p) => p.deviceToken === deviceToken);
     const isCreator = !!deviceToken && event.creatorDeviceToken === deviceToken;
 
-    if (!isParticipant && !isCreator) {
+    if (!isAdmin && !isParticipant && !isCreator) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -406,8 +421,9 @@ export async function updateEventCurrency(data: unknown): Promise<ActionResult> 
     // 1. Lấy deviceToken từ cookie
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+    const isAdmin = await checkIsAdminSession();
 
-    if (!deviceToken) {
+    if (!isAdmin && !deviceToken) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -430,7 +446,7 @@ export async function updateEventCurrency(data: unknown): Promise<ActionResult> 
     }
 
     // 3. Kiểm tra quyền creator
-    if (event.creatorDeviceToken !== deviceToken) {
+    if (!isAdmin && event.creatorDeviceToken !== deviceToken) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -457,10 +473,7 @@ export async function toggleAdvancedMode(eventId: string, isAdvancedMode: boolea
   try {
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
-
-    if (!deviceToken) {
-      return { success: false, error: "unauthorized" };
-    }
+    const isAdmin = await checkIsAdminSession();
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -469,8 +482,8 @@ export async function toggleAdvancedMode(eventId: string, isAdvancedMode: boolea
 
     if (!event) return { success: false, error: "Sự kiện không tồn tại" };
     if (event.isLocked) return { success: false, error: "Sự kiện đã bị khóa." };
-    
-    if (event.creatorDeviceToken !== deviceToken) {
+
+    if (!isAdmin && event.creatorDeviceToken !== deviceToken) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -534,6 +547,7 @@ export async function updateEventTitle({
   try {
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+    const isAdmin = await checkIsAdminSession();
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -548,7 +562,7 @@ export async function updateEventTitle({
       return { success: false, error: "Sự kiện đã bị khóa, không thể đổi tên." };
     }
 
-    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+    if (!isAdmin && (!deviceToken || event.creatorDeviceToken !== deviceToken)) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -565,6 +579,7 @@ export async function updateEventTitle({
   }
 }
 
+
 export async function toggleEventLock(
   eventId: string,
   isLocked: boolean
@@ -572,6 +587,7 @@ export async function toggleEventLock(
   try {
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+    const isAdmin = await checkIsAdminSession();
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -582,7 +598,7 @@ export async function toggleEventLock(
       return { success: false, error: "Sự kiện không tồn tại." };
     }
 
-    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+    if (!isAdmin && (!deviceToken || event.creatorDeviceToken !== deviceToken)) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -603,6 +619,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
   try {
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+    const isAdmin = await checkIsAdminSession();
 
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -619,7 +636,7 @@ export async function deleteEvent(eventId: string): Promise<ActionResult> {
       return { success: false, error: "Sự kiện không tồn tại." };
     }
 
-    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+    if (!isAdmin && (!deviceToken || event.creatorDeviceToken !== deviceToken)) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -678,7 +695,8 @@ export async function updateEventRoundingMode(data: unknown): Promise<ActionResu
       return { success: false, error: "Sự kiện đã bị khóa, không thể thay đổi cài đặt." };
     }
 
-    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+    const isAdmin = await checkIsAdminSession();
+    if (!isAdmin && (!deviceToken || event.creatorDeviceToken !== deviceToken)) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -720,7 +738,8 @@ export async function updateEventPasscode(data: unknown): Promise<ActionResult> 
       return { success: false, error: "Sự kiện đã bị khóa, không thể thay đổi cài đặt." };
     }
 
-    if (!deviceToken || event.creatorDeviceToken !== deviceToken) {
+    const isAdmin = await checkIsAdminSession();
+    if (!isAdmin && (!deviceToken || event.creatorDeviceToken !== deviceToken)) {
       return { success: false, error: "unauthorized" };
     }
 
@@ -734,5 +753,22 @@ export async function updateEventPasscode(data: unknown): Promise<ActionResult> 
   } catch (error) {
     console.error("[updateEventPasscode] error:", error);
     return { success: false, error: "Lỗi hệ thống khi cập nhật mã PIN." };
+  }
+}
+export async function getValidEventIds(eventIds: string[]): Promise<string[] | null> {
+  if (!eventIds || eventIds.length === 0) return [];
+  try {
+    const validEvents = await prisma.event.findMany({
+      where: {
+        id: { in: eventIds },
+      },
+      select: {
+        id: true,
+      },
+    });
+    return validEvents.map((e) => e.id);
+  } catch (error) {
+    console.error("[getValidEventIds] error:", error);
+    return null;
   }
 }

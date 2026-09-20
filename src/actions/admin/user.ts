@@ -238,3 +238,64 @@ export async function adminBulkDeleteUsers(
   }
 }
 
+export interface AdminUserEventItem {
+  eventId: string;
+  title: string;
+  participantName: string;
+  joinedAt: Date;
+  isCreator: boolean;
+  isLocked: boolean;
+}
+
+export type GetAdminUserEventsResult =
+  | { success: true; data: AdminUserEventItem[] }
+  | { success: false; error: string };
+
+export async function getAdminUserEvents(
+  targetUserId: string
+): Promise<GetAdminUserEventsResult> {
+  try {
+    const session = await auth();
+    if (!session?.user || session.user.role !== "ADMIN") {
+      throw new Error("UNAUTHORIZED");
+    }
+
+    const participants = await prisma.participant.findMany({
+      where: { userId: targetUserId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        deviceToken: true,
+        event: {
+          select: {
+            id: true,
+            title: true,
+            creatorDeviceToken: true,
+            isLocked: true,
+          },
+        },
+      },
+    });
+
+    const data: AdminUserEventItem[] = participants.map((p) => ({
+      eventId: p.event.id,
+      title: p.event.title,
+      participantName: p.name,
+      joinedAt: p.createdAt,
+      isCreator: Boolean(p.deviceToken && p.deviceToken === p.event.creatorDeviceToken),
+      isLocked: p.event.isLocked,
+    }));
+
+    return { success: true, data };
+  } catch (error) {
+    console.error("[getAdminUserEvents] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "SYSTEM_ERROR",
+    };
+  }
+}
+
+

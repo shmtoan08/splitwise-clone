@@ -14,7 +14,7 @@ import {
 import { LoginForm } from "./LoginForm";
 import { RegisterForm } from "./RegisterForm";
 import { useTranslations } from "next-intl";
-import { LogIn, Loader2 } from "lucide-react";
+import { LogIn, Loader2, Wallet } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Link } from "@/i18n/routing";
 
@@ -61,7 +61,7 @@ export function AuthModal({ triggerText, variant = "default", className }: AuthM
   );
 
   const formContent = (
-    <div className="px-4 pb-4 md:px-0 md:pb-0">
+    <div className="px-4 pb-4 md:px-0 md:pb-0 animate-in fade-in duration-300">
       {view === "login" ? (
         <LoginForm
           onSuccess={handleSuccess}
@@ -71,19 +71,19 @@ export function AuthModal({ triggerText, variant = "default", className }: AuthM
         <RegisterForm onSuccess={handleSuccess} onGoToLogin={() => setView("login")} />
       )}
 
-      <div className="relative my-4">
+      <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-slate-200" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-2 text-slate-400 font-normal">{t("or_continue_with")}</span>
+          <span className="bg-white/95 px-3 text-slate-400 font-medium tracking-wide">{t("or_continue_with")}</span>
         </div>
       </div>
 
       <Button 
         variant="outline" 
         disabled={isGoogleLoading}
-        className="w-full h-11 rounded-full bg-white text-slate-700 border-slate-300 hover:bg-slate-50 font-medium shadow-sm flex items-center justify-center gap-3 mt-4 active:scale-95 transition-all"
+        className="w-full h-11 rounded-full bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 font-medium shadow-sm flex items-center justify-center gap-3 mt-4 active:scale-95 transition-all"
         onClick={handleGoogleSignIn}
       >
         {isGoogleLoading ? (
@@ -106,12 +106,12 @@ export function AuthModal({ triggerText, variant = "default", className }: AuthM
 
       <div className="mt-6 text-center text-sm text-slate-500">
         {view === "login" ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div>
               <Link
                 href="/forgot-password"
                 onClick={() => setOpen(false)}
-                className="text-xs text-slate-500 hover:text-blue-600 hover:underline transition-colors"
+                className="text-xs text-slate-500 hover:text-emerald-600 hover:underline transition-colors font-medium"
               >
                 {t("forgot_password_link")}
               </Link>
@@ -120,7 +120,7 @@ export function AuthModal({ triggerText, variant = "default", className }: AuthM
               {t("no_account")}{" "}
               <button
                 type="button"
-                className="text-primary font-bold hover:underline"
+                className="text-emerald-600 font-semibold hover:text-emerald-700 hover:underline transition-colors"
                 onClick={() => setView("register")}
               >
                 {t("register_link")}
@@ -128,16 +128,16 @@ export function AuthModal({ triggerText, variant = "default", className }: AuthM
             </div>
           </div>
         ) : (
-          <>
+          <div className="pt-2">
             {t("has_account")}{" "}
             <button
               type="button"
-              className="text-primary font-bold hover:underline"
+              className="text-emerald-600 font-semibold hover:text-emerald-700 hover:underline transition-colors"
               onClick={() => setView("login")}
             >
               {t("login_link")}
             </button>
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -148,12 +148,20 @@ export function AuthModal({ triggerText, variant = "default", className }: AuthM
       <DialogTrigger className={triggerButtonClasses}>
         {triggerContent}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[400px] w-[95vw] rounded-3xl p-6 sm:p-8">
-        <DialogHeader className="text-center mb-2">
-          <DialogTitle className="text-2xl font-normal text-slate-900 text-center">{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+      <DialogContent className="sm:max-w-[420px] w-[95vw] rounded-[2rem] p-6 sm:p-8 bg-white/95 backdrop-blur-xl border-slate-200/60 shadow-2xl overflow-hidden">
+        {/* Subtle glow effect behind the form */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-32 bg-emerald-400/10 blur-[50px] rounded-full pointer-events-none"></div>
+        
+        <DialogHeader className="text-center mb-4 relative z-10">
+          <div className="mx-auto w-12 h-12 mb-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
+            <Wallet className="w-6 h-6 text-white" />
+          </div>
+          <DialogTitle className="text-2xl font-bold tracking-tight text-slate-800 text-center">{title}</DialogTitle>
+          <DialogDescription className="text-slate-500">{description}</DialogDescription>
         </DialogHeader>
-        {formContent}
+        <div className="relative z-10">
+          {formContent}
+        </div>
       </DialogContent>
     </Dialog>
   );

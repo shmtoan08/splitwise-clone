@@ -129,6 +129,7 @@
     "deleteEventSuccess": "Đã xóa sự kiện thành công.",
     "deleteEventButton": "Xóa vĩnh viễn",
     "adminViewBannerText": "Bạn đang xem sự kiện với tư cách Admin (Chế độ chỉ xem)",
+    "adminViewBannerOverrideText": "Bạn đang quản lý sự kiện với toàn quyền Quản trị viên",
     "adminViewBannerClaimBtn": "Tôi là thành viên nhóm",
     "backToAdmin": "Trang quản trị",
     "backToAdminEvents": "Về danh sách sự kiện"
@@ -740,8 +741,18 @@
     "impersonating_banner_text": "Bạn đang thao tác với tư cách: {name}",
     "exit_impersonation": "Thoát hỗ trợ",
     "user_not_found": "Không tìm thấy người dùng này.",
-    "cannot_impersonate_admin": "Không thể đăng nhập dưới tư cách Quản trị viên hoặc chính mình."
+    "cannot_impersonate_admin": "Không thể đăng nhập dưới tư cách Quản trị viên hoặc chính mình.",
+    "events_sheet_title": "Danh sách nhóm tham gia",
+    "events_sheet_desc": "Các nhóm và sự kiện người dùng đã tham gia",
+    "events_sheet_empty": "Người dùng này chưa tham gia nhóm nào",
+    "events_sheet_close": "Đóng",
+    "role_creator": "Người tạo",
+    "role_member": "Thành viên",
+    "participant_as": "Tên trong nhóm: {name}",
+    "event_locked": "Đã khóa sổ",
+    "joined_at": "Tham gia: {date}"
   },
+
   "adminEvents": {
     "title": "Quản lý sự kiện",
     "description": "Tra cứu, theo dõi, khóa sổ hoặc xóa các nhóm chia tiền trong hệ thống",
@@ -800,6 +811,20 @@
     "success_bulk_lock": "Đã khóa sổ thành công cho {count} sự kiện!",
     "success_bulk_unlock": "Đã mở khóa sổ thành công cho {count} sự kiện!",
     "success_bulk_delete": "Đã xóa thành công {count} sự kiện!",
-    "clear_selection": "Bỏ chọn"
+    "clear_selection": "Bỏ chọn",
+    "members_sheet_title": "Thành viên nhóm",
+    "members_sheet_desc": "Quản lý thành viên và liên kết thiết bị",
+    "role_creator": "Người tạo",
+    "role_member": "Thành viên",
+    "reset_device": "Reset thiết bị",
+    "reset_device_confirm": "Bạn có chắc muốn hủy liên kết thiết bị của thành viên này?",
+    "linked": "Đã liên kết",
+    "waiting": "Chờ nhận",
+    "empty_members": "Chưa có thành viên nào",
+    "device_id": "ID Thiết bị:",
+    "not_linked": "Chưa liên kết thiết bị",
+    "device_info_label": "Thiết bị:",
+    "unnamed_user": "Người dùng chưa đặt tên",
+    "guest_user": "Khách ẩn danh (chưa liên kết tài khoản)"
   }
 }

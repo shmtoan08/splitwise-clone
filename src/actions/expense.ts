@@ -14,6 +14,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { getExchangeRate, ExchangeRateError } from "@/lib/exchangeRate";
 import { v2 as cloudinary } from "cloudinary";
+import { auth } from "@/lib/auth";
 
 // Cấu hình Cloudinary SDK ở Server (dùng API Secret an toàn)
 cloudinary.config({
@@ -23,6 +24,17 @@ cloudinary.config({
 });
 
 const DEVICE_TOKEN_COOKIE = "split-app-device-token";
+
+/**
+ * Kiểm tra session hiện tại có phải là ADMIN không (và không phải đang impersonate).
+ */
+async function checkIsAdminSession(): Promise<boolean> {
+  const session = await auth();
+  if (!session?.user) return false;
+  if (session.user.role !== "ADMIN") return false;
+  if (session.user.isImpersonated) return false;
+  return true;
+}
 
 /** Lấy tỷ giá: ưu tiên manualExchangeRate → fallback gọi API */
 async function resolveExchangeRate(
@@ -167,24 +179,27 @@ export async function addExpense(data: unknown): Promise<ActionResult> {
 
     validateSplitSum(finalAmount, calculatedSplits, calculatedSurplus);
 
-    // 5. Lấy createdById từ cookie
+    // 5. Lấy createdById từ cookie hoặc session admin
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
+    const isAdmin = await checkIsAdminSession();
 
-    if (!deviceToken) {
+    if (!isAdmin && !deviceToken) {
       return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
     }
 
-    const currentParticipant = await prisma.participant.findFirst({
-      where: { eventId, deviceToken },
-      select: { id: true },
-    });
+    const currentParticipant = deviceToken
+      ? await prisma.participant.findFirst({
+          where: { eventId, deviceToken },
+          select: { id: true },
+        })
+      : null;
 
-    if (!currentParticipant) {
+    if (!isAdmin && !currentParticipant) {
       return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
     }
 
-    const createdById = currentParticipant.id;
+    const createdById = currentParticipant?.id || null;
 
     let createdExpenseId: string | null = null;
 
@@ -343,14 +358,18 @@ export async function updateExpense(data: unknown): Promise<ActionResult> {
     // 5. Xác nhận danh tính & quyền chỉnh sửa
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
-    if (!deviceToken) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
+    const isAdmin = await checkIsAdminSession();
 
-    const currentParticipant = await prisma.participant.findFirst({
-      where: { eventId, deviceToken },
-      select: { id: true },
-    });
+    if (!isAdmin && !deviceToken) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
 
-    const isCreator = !!(deviceToken && eventRecord.creatorDeviceToken === deviceToken);
+    const currentParticipant = deviceToken
+      ? await prisma.participant.findFirst({
+          where: { eventId, deviceToken },
+          select: { id: true },
+        })
+      : null;
+
+    const isCreator = !!(deviceToken && eventRecord.creatorDeviceToken === deviceToken) || isAdmin;
     const isAuthorOrPayer = currentParticipant && (existingExpense.createdById === currentParticipant.id || existingExpense.payerId === currentParticipant.id);
 
     if (!isCreator && !isAuthorOrPayer) {
@@ -413,22 +432,26 @@ export async function deleteExpense(expenseId: string, eventId: string): Promise
   try {
     const cookieStore = await cookies();
     const deviceToken = cookieStore.get(DEVICE_TOKEN_COOKIE)?.value;
-    if (!deviceToken) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
+    const isAdmin = await checkIsAdminSession();
+
+    if (!isAdmin && !deviceToken) return { success: false, error: "Bạn chưa xác nhận danh tính trong nhóm này." };
 
     const [eventRecord, existingExpense, currentParticipant] = await Promise.all([
       prisma.event.findUnique({ where: { id: eventId }, select: { isLocked: true, creatorDeviceToken: true } }),
       prisma.expense.findUnique({ where: { id: expenseId }, select: { receiptUrl: true, createdById: true, payerId: true } }),
-      prisma.participant.findFirst({
-        where: { eventId, deviceToken },
-        select: { id: true },
-      }),
+      deviceToken
+        ? prisma.participant.findFirst({
+            where: { eventId, deviceToken },
+            select: { id: true },
+          })
+        : null,
     ]);
 
     if (!eventRecord) return { success: false, error: "Sự kiện không tồn tại." };
     if (eventRecord.isLocked) return { success: false, error: "Sự kiện đã bị khóa, không thể xóa chi tiêu." };
     if (!existingExpense) return { success: false, error: "Khoản chi không tồn tại." };
 
-    const isCreator = !!(deviceToken && eventRecord.creatorDeviceToken === deviceToken);
+    const isCreator = !!(deviceToken && eventRecord.creatorDeviceToken === deviceToken) || isAdmin;
     const isAuthorOrPayer = currentParticipant && (existingExpense.createdById === currentParticipant.id || existingExpense.payerId === currentParticipant.id);
 
     if (!isCreator && !isAuthorOrPayer) {

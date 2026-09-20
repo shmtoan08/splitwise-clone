@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { EventActionsDropdown } from "@/components/admin/EventActionsDropdown";
 import { EventIdBadge } from "@/components/admin/EventIdBadge";
 import { FloatingActionBar } from "@/components/admin/FloatingActionBar";
+import { EventMembersSheet } from "@/components/admin/EventMembersSheet";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -53,6 +54,7 @@ export function EventsTableClient({ events, locale }: EventsTableClientProps) {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selectedEventIdForMembers, setSelectedEventIdForMembers] = useState<string | null>(null);
 
   const formatDate = (date: Date) => {
     try {
@@ -250,14 +252,18 @@ export function EventsTableClient({ events, locale }: EventsTableClientProps) {
                 {/* Hàng 3: Metadata (Số thành viên, Số khoản chi & Ngày tạo) */}
                 <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100/80 pl-7">
                   <div className="flex items-center gap-2.5">
-                    <div className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <button 
+                      type="button"
+                      className="flex items-center gap-1 hover:text-blue-600 hover:underline cursor-pointer group"
+                      onClick={() => setSelectedEventIdForMembers(event.id)}
+                    >
+                      <Users className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 shrink-0" />
                       <span>
                         {t("stats_participants", {
                           count: event._count.participants,
                         })}
                       </span>
-                    </div>
+                    </button>
                     <span className="text-slate-300">•</span>
                     <div className="flex items-center gap-1">
                       <Receipt className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -381,14 +387,18 @@ export function EventsTableClient({ events, locale }: EventsTableClientProps) {
                   {/* Cột 4: Thống kê thành viên & chi phí */}
                   <TableCell className="py-3.5 text-xs text-slate-600">
                     <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 hover:text-blue-600 hover:underline cursor-pointer group"
+                        onClick={() => setSelectedEventIdForMembers(event.id)}
+                      >
+                        <Users className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 shrink-0" />
                         <span>
                           {t("stats_participants", {
                             count: event._count.participants,
                           })}
                         </span>
-                      </div>
+                      </button>
                       <div className="flex items-center gap-1.5 text-slate-500">
                         <Receipt className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span>
@@ -514,6 +524,11 @@ export function EventsTableClient({ events, locale }: EventsTableClientProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <EventMembersSheet
+        eventId={selectedEventIdForMembers}
+        isOpen={!!selectedEventIdForMembers}
+        onClose={() => setSelectedEventIdForMembers(null)}
+      />
     </>
   );
 }

@@ -129,6 +129,7 @@
     "deleteEventSuccess": "グループを削除しました。",
     "deleteEventButton": "完全に削除",
     "adminViewBannerText": "管理者としてこのイベントを閲覧しています（閲覧専用モード）",
+    "adminViewBannerOverrideText": "管理者権限でこのイベントを管理しています（全権限）",
     "adminViewBannerClaimBtn": "私はこのグループのメンバーです",
     "backToAdmin": "管理画面へ",
     "backToAdminEvents": "イベント一覧へ戻る"
@@ -737,8 +738,18 @@
     "impersonating_banner_text": "現在、代理ログイン中: {name}",
     "exit_impersonation": "サポートを終了",
     "user_not_found": "ユーザーが見つかりませんでした。",
-    "cannot_impersonate_admin": "管理者または自身のアカウントには代理ログインできません。"
+    "cannot_impersonate_admin": "管理者または自身のアカウントには代理ログインできません。",
+    "events_sheet_title": "参加グループ一覧",
+    "events_sheet_desc": "ユーザーが参加しているグループ・イベントの一覧",
+    "events_sheet_empty": "このユーザーはまだどのグループにも参加していません",
+    "events_sheet_close": "閉じる",
+    "role_creator": "作成者",
+    "role_member": "メンバー",
+    "participant_as": "表示名: {name}",
+    "event_locked": "締め済み",
+    "joined_at": "参加日: {date}"
   },
+
   "adminEvents": {
     "title": "イベント管理",
     "description": "割り勘イベントの検索、閲覧、締め処理（ロック）、削除を管理",
@@ -797,6 +808,20 @@
     "success_bulk_lock": "{count} 件のイベントを締め切りました！",
     "success_bulk_unlock": "{count} 件のイベントの締め切りを解除しました！",
     "success_bulk_delete": "{count} 件のイベントを正常に削除しました！",
-    "clear_selection": "選択解除"
+    "clear_selection": "選択解除",
+    "members_sheet_title": "グループメンバー",
+    "members_sheet_desc": "メンバーとデバイス連携の管理",
+    "role_creator": "作成者",
+    "role_member": "メンバー",
+    "reset_device": "連携解除",
+    "reset_device_confirm": "このメンバーのデバイス連携を解除してもよろしいですか？",
+    "linked": "連携済み",
+    "waiting": "待機中",
+    "empty_members": "メンバーがいません",
+    "device_id": "デバイスID:",
+    "not_linked": "連携していません",
+    "device_info_label": "デバイス:",
+    "unnamed_user": "名前未設定ユーザー",
+    "guest_user": "ゲスト（アカウント未連携）"
   }
 }

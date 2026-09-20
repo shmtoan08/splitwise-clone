@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { deleteExpense } from "@/actions/expense";
 import { useAlert } from "@/providers/AlertProvider";
 import { useParticipantIdentity } from "@/hooks/useParticipantIdentity";
+import { useIdentity } from "@/providers/IdentityProvider";
 import {
   Dialog,
   DialogContent,
@@ -75,6 +76,7 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
   const tExpense = useTranslations("expense");
   const tCommon = useTranslations("common");
   const { showAlert } = useAlert();
+  const { requireIdentity } = useIdentity();
   const { identity } = useParticipantIdentity(participants as any);
   const effectiveUserId = currentParticipantId || identity?.participantId;
 
@@ -189,8 +191,10 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
       showLockedNotice();
       return;
     }
-    setSelectedExpense(undefined);
-    setFormOpen(true);
+    requireIdentity(() => {
+      setSelectedExpense(undefined);
+      setFormOpen(true);
+    });
   };
 
   return (
@@ -461,8 +465,10 @@ export default function ExpenseTab({ eventId, participants, expenses, currency, 
                                 showLockedNotice();
                                 return;
                               }
-                              setSelectedExpense({ ...exp, id: undefined as any, version: 1, receiptUrl: null });
-                              setFormOpen(true);
+                              requireIdentity(() => {
+                                setSelectedExpense({ ...exp, id: undefined as any, version: 1, receiptUrl: null });
+                                setFormOpen(true);
+                              });
                             }}
                             className={`flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-100 bg-blue-50 hover:bg-blue-100 active:scale-95 transition-all text-blue-600 shadow-sm group ${
                               isLocked ? "opacity-50" : ""

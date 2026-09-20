@@ -63,6 +63,8 @@ model Participant {
   /// Unique để 1 token chỉ map 1 participant.
   /// Dùng để xác thực "soft identity" mà không cần đăng nhập.
   deviceToken String?
+  /// Chuỗi hiển thị Trình duyệt / HĐH khi người dùng xác nhận thiết bị
+  deviceInfo  String?
   /// Chế độ ngân sách của thành viên
   budgetMode  BudgetMode @default(FIXED)
   /// Ngân sách cố định (chỉ có ý nghĩa khi budgetMode = FIXED)

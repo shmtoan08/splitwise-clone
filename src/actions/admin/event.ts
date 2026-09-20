@@ -204,3 +204,71 @@ export async function adminBulkToggleLockEvents(
   }
 }
 
+export interface AdminEventMemberItem {
+  id: string;
+  name: string;
+  hasDevice: boolean;
+  isCreator: boolean;
+  joinedAt: Date;
+  deviceToken: string | null;
+  deviceInfo?: string | null;
+  user?: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+  } | null;
+}
+
+export async function getAdminEventMembers(
+  eventId: string
+): Promise<{ success: boolean; data?: AdminEventMemberItem[]; error?: string }> {
+  try {
+    await requireAdmin();
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { creatorDeviceToken: true },
+    });
+
+    if (!event) {
+      return { success: false, error: "EVENT_NOT_FOUND" };
+    }
+
+    const participants = await prisma.participant.findMany({
+      where: { eventId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        name: true,
+        deviceToken: true,
+        deviceInfo: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          },
+        },
+      },
+    });
+
+    const mapped = participants.map((p) => ({
+      id: p.id,
+      name: p.name,
+      hasDevice: p.deviceToken !== null,
+      isCreator: p.deviceToken === event.creatorDeviceToken && p.deviceToken !== null,
+      joinedAt: p.createdAt,
+      deviceToken: p.deviceToken,
+      deviceInfo: p.deviceInfo,
+      user: p.user,
+    }));
+
+    return { success: true, data: mapped };
+  } catch (error) {
+    console.error("[getAdminEventMembers] Error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "SYSTEM_ERROR" };
+  }
+}

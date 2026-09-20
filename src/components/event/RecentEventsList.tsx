@@ -1,30 +1,59 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRecentEvents } from "@/hooks/useRecentEvents";
 import EventQuickViewModal from "./EventQuickViewModal";
 import { BarChart2 } from "lucide-react";
-
-
+import { getValidEventIds } from "@/actions/event";
 
 // ── Component ─────────────────────────────────────────────────────────────
 
 export default function RecentEventsList() {
   const t = useTranslations("home");
-  const { recentEvents } = useRecentEvents();
+  const { recentEvents, syncValidEvents } = useRecentEvents();
   const [isMounted, setIsMounted] = useState(false);
+  const [isValidating, setIsValidating] = useState(true);
 
   // Modal state
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [activeEventTitle, setActiveEventTitle] = useState<string>("");
 
   // Local cache: eventId → SummaryData (managed inside EventQuickViewModal)
+  const hasCheckedRef = useRef(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    
+    if (recentEvents.length === 0) {
+      setIsValidating(false);
+      return;
+    }
+
+    if (hasCheckedRef.current) return;
+    hasCheckedRef.current = true;
+
+    const checkEvents = async () => {
+      try {
+        const ids = recentEvents.map((e) => e.id);
+        const validIds = await getValidEventIds(ids);
+        if (validIds !== null && validIds.length !== ids.length) {
+          syncValidEvents(validIds);
+        }
+      } catch (error) {
+        console.error("Failed to check events", error);
+      } finally {
+        setIsValidating(false);
+      }
+    };
+    
+    checkEvents();
+  }, [isMounted, recentEvents, syncValidEvents]);
 
   const handleOpenQuickView = useCallback(
     (e: React.MouseEvent, eventId: string, eventTitle: string) => {
@@ -36,7 +65,11 @@ export default function RecentEventsList() {
     []
   );
 
-  if (!isMounted || !recentEvents || recentEvents.length === 0) {
+  if (!isMounted || isValidating) {
+    return null; // Có thể thay bằng Skeleton nếu muốn mượt hơn
+  }
+
+  if (!recentEvents || recentEvents.length === 0) {
     return null;
   }
 

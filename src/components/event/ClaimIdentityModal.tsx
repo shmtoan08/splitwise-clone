@@ -22,8 +22,9 @@ type Props = {
   eventId: string;
   participants: Participant[];
   hasPasscode?: boolean;
-  forceOpen?: boolean;
+  isOpen?: boolean;
   onClose?: () => void;
+  onSuccess?: () => void;
   currentUserName?: string;
 };
 
@@ -31,14 +32,14 @@ export default function ClaimIdentityModal({
   eventId,
   participants,
   hasPasscode,
-  forceOpen,
+  isOpen,
   onClose,
+  onSuccess,
   currentUserName,
 }: Props) {
   const t = useTranslations("participant");
   const tCommon = useTranslations("common");
   const { data: session } = useSession();
-  const { needsIdentityClaim } = useParticipantIdentity(participants);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -70,11 +71,6 @@ export default function ClaimIdentityModal({
   // State nhập PIN bảo vệ Creator
   const [pinTarget, setPinTarget] = useState<Participant | null>(null);
   const [passcode, setPasscode] = useState("");
-  
-  const [isSkipped, setIsSkipped] = useState(false);
-
-  // Modal sẽ ẩn nếu không cần định danh (trừ khi forceOpen), HOẶC nếu người dùng đã bấm Bỏ qua
-  if ((!needsIdentityClaim && !forceOpen) || isSkipped) return null;
 
   // LOGIC: Lọc bỏ tài khoản ảo Quỹ Công ty sinh ra tự động
   const realParticipants = participants.filter((p) => p.name !== "🏢 Quỹ Công ty");
@@ -102,6 +98,7 @@ export default function ClaimIdentityModal({
     } else {
       startTransition(() => {
         router.refresh();
+        onSuccess?.();
       });
     }
   };
@@ -132,6 +129,7 @@ export default function ClaimIdentityModal({
     } else {
       startTransition(() => {
         router.refresh();
+        onSuccess?.();
       });
     }
   };
@@ -153,6 +151,7 @@ export default function ClaimIdentityModal({
     } else {
       startTransition(() => {
         router.refresh();
+        onSuccess?.();
       });
     }
   };
@@ -161,16 +160,15 @@ export default function ClaimIdentityModal({
 
   return (
     <Dialog
-      open={true}
+      open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
-          setIsSkipped(true);
           onClose?.();
         }
       }}
     >
       <DialogContent 
-        className="sm:max-w-[420px] w-[92vw] rounded-3xl p-6 sm:p-8 [&>button]:hidden border-slate-100 shadow-xl bg-white outline-none"
+        className="sm:max-w-[420px] w-[92vw] rounded-3xl p-6 sm:p-8 border-slate-100 shadow-xl bg-white outline-none"
       > 
         {pinTarget ? (
           <div className="flex flex-col gap-4 py-1 animate-in fade-in zoom-in-95 duration-200">
@@ -346,25 +344,6 @@ export default function ClaimIdentityModal({
                 </div>
               </div>
               
-              {/* Nút Hủy / Bỏ qua */}
-              <div className="pt-2 text-center w-full">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    if (isBrandNewEvent) {
-                      router.push("/");
-                    } else {
-                      setIsSkipped(true);
-                      onClose?.();
-                    }
-                  }}
-                  className="w-full sm:w-auto text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-800 rounded-2xl h-10 px-5 transition-all"
-                >
-                  {isBrandNewEvent ? t("skipBtnNew") : t("skipBtnExisting")}
-                </Button>
-              </div>
-
             </div>
           </>
         )}
